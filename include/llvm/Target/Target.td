@@ -501,6 +501,10 @@ class Instruction {
   /// can be queried via the getNamedOperandIdx() function which is generated
   /// by TableGen.
   bit UseNamedOperandTable = 0;
+
+
+  /// ALF string for the SWEET tool is to be outputted
+  string ALFString = "";
 }
 
 /// PseudoInstExpansion - Expansion information for a pseudo-instruction.
