@@ -1091,6 +1091,7 @@ def tMOVi8 : T1sI<(outs tGPR:$Rd), (ins imm0_255:$imm8), IIC_iMOVi,
   bits<8> imm8;
   let Inst{10-8} = Rd;
   let Inst{7-0}  = imm8;
+  let ALFString = "tmovTEST";
 }
 // Because we have an explicit tMOVSr below, we need an alias to handle
 // the immediate "movs" form here. Blech.
