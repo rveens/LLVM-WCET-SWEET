@@ -11,6 +11,7 @@ tablegen(LLVM ARMGenFastISel.inc -gen-fast-isel)
 tablegen(LLVM ARMGenCallingConv.inc -gen-callingconv)
 tablegen(LLVM ARMGenSubtargetInfo.inc -gen-subtarget)
 tablegen(LLVM ARMGenDisassemblerTables.inc -gen-disassembler)
+tablegen(LLVM ARMGenALFWriter.inc -gen-alf-writer)
 add_public_tablegen_target(ARMCommonTableGen)
 
 # Add GlobalISel files if the user wants to build it.
@@ -50,6 +51,7 @@ add_llvm_target(ARMCodeGen
   ARMSelectionDAGInfo.cpp
   ARMSubtarget.cpp
   ARMTargetMachine.cpp
+  ARMALFPrinter.cpp
   ARMTargetObjectFile.cpp
   ARMTargetTransformInfo.cpp
   MLxExpansionPass.cpp

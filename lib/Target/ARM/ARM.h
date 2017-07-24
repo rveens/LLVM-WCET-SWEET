@@ -38,6 +38,7 @@ FunctionPass *createA15SDOptimizerPass();
 FunctionPass *createARMLoadStoreOptimizationPass(bool PreAlloc = false);
 FunctionPass *createARMExpandPseudoPass();
 FunctionPass *createARMConstantIslandPass();
+FunctionPass *createARMALFPrinterPass();
 FunctionPass *createMLxExpansionPass();
 FunctionPass *createThumb2ITBlockPass();
 FunctionPass *createARMOptimizeBarriersPass();

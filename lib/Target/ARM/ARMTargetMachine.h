@@ -126,6 +126,7 @@ public:
                        CodeGenOpt::Level OL);
 };
 
+
 } // end namespace llvm
 
 #endif

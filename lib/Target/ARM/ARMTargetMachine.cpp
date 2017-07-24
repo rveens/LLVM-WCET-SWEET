@@ -34,7 +34,9 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
+
 using namespace llvm;
+
 
 static cl::opt<bool>
 DisableA15SDOptimization("disable-a15-sd-optimization", cl::Hidden,
@@ -541,4 +543,7 @@ void ARMPassConfig::addPreEmitPass() {
     addPass(createARMOptimizeBarriersPass());
 
   addPass(createARMConstantIslandPass());
+
+  // TEST
+  addPass(createARMALFPrinterPass());
 }
