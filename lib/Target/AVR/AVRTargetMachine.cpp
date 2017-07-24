@@ -67,6 +67,7 @@ public:
   bool addInstSelector() override;
   void addPreSched2() override;
   void addPreRegAlloc() override;
+  void addPreEmitPass() override;
 };
 } // namespace
 
@@ -113,6 +114,30 @@ void AVRPassConfig::addPreRegAlloc() {
 void AVRPassConfig::addPreSched2() {
   addPass(createAVRRelaxMemPass());
   addPass(createAVRExpandPseudoPass());
+}
+
+class TestMFP : public MachineFunctionPass {
+public:
+	static char ID;
+    TestMFP() : MachineFunctionPass(ID) { }
+
+    bool runOnMachineFunction(MachineFunction &MF) override 
+	{
+		const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
+
+		for (MachineBasicBlock &mbb : MF) {
+			dbgs() << "\n";
+			for (MachineInstr &mi : mbb) {
+				dbgs() << ">>>" << TII->getName(mi.getOpcode()) << "\n";
+			}
+		}
+	}
+};
+char TestMFP::ID = 0;
+
+void AVRPassConfig::addPreEmitPass() {
+	// TEST
+	addPass(new TestMFP());
 }
 
 } // end of namespace llvm
