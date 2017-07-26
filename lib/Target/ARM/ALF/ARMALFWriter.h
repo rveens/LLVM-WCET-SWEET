@@ -1,3 +1,12 @@
+#ifndef LLVM_LIB_TARGET_ARM_ALF_ARMALFWRITER_H
+#define LLVM_LIB_TARGET_ARM_ALF_ARMALFWRITER_H
+
+#include "ARM.h"
+#include "ALFBuilder.h"
+
+using namespace llvm;
+using namespace alf;
+
 namespace {
 
 	class ARMALFWriter : public MachineFunctionPass {
@@ -9,7 +18,10 @@ namespace {
 			bool runOnMachineFunction(MachineFunction &MF) override;
 
 			// Table'gen'd
-			void printInstructionALF(const llvm::MachineInstr&, llvm::raw_ostream&);
+			void printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx);
+			void regDefALF(ALFBuilder &b);
 	};
 	char ARMALFWriter::ID = 0;
 }
+
+#endif
