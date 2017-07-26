@@ -545,5 +545,5 @@ void ARMPassConfig::addPreEmitPass() {
   addPass(createARMConstantIslandPass());
 
   // TEST
-  addPass(createARMALFPrinterPass());
+  addPass(createARMALFWriterPass());
 }

@@ -1,4 +1,4 @@
-;===- ./lib/Target/ARM/LLVMBuild.txt ---------------------------*- Conf -*--===;
+;===- ./lib/Target/ARM/AsmParser/LLVMBuild.txt -----------------*- Conf -*--===;
 ;
 ;                     The LLVM Compiler Infrastructure
 ;
@@ -15,21 +15,11 @@
 ;
 ;===------------------------------------------------------------------------===;
 
-[common]
-subdirectories = ALF AsmParser Disassembler InstPrinter MCTargetDesc TargetInfo 
-
 [component_0]
-type = TargetGroup
-name = ARM
-parent = Target
-has_asmparser = 1
-has_asmprinter = 1
-has_disassembler = 1
-has_jit = 1
-
-[component_1]
 type = Library
-name = ARMCodeGen
+name = ARMALFWriter
 parent = ARM
-required_libraries = ARMALFWriter ARMAsmPrinter ARMDesc ARMInfo Analysis AsmPrinter CodeGen Core MC Scalar SelectionDAG Support Target GlobalISel
+required_libraries = ARMDesc ARMInfo MC MCParser Support
 add_to_library_groups = ARM
+
+

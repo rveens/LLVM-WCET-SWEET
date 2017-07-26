@@ -51,7 +51,6 @@ add_llvm_target(ARMCodeGen
   ARMSelectionDAGInfo.cpp
   ARMSubtarget.cpp
   ARMTargetMachine.cpp
-  ARMALFPrinter.cpp
   ARMTargetObjectFile.cpp
   ARMTargetTransformInfo.cpp
   MLxExpansionPass.cpp
@@ -70,3 +69,4 @@ add_subdirectory(AsmParser)
 add_subdirectory(Disassembler)
 add_subdirectory(InstPrinter)
 add_subdirectory(MCTargetDesc)
+add_subdirectory(ALF)
