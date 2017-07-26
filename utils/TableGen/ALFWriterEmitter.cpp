@@ -3,23 +3,34 @@
 #include "CodeGenRegisters.h"
 #include "CodeGenTarget.h"
 #include "CodeGenInstruction.h"
+#include "CodeGenDAGPatterns.h"
 
 #include "llvm/ADT/StringExtras.h"
 
-#include <sstream>
+#include <vector>
 
 using namespace llvm;
+using namespace std;
 
 namespace {
 
 class ALFWriterEmitter {
 	RecordKeeper &Records;
 	CodeGenTarget Target;
-	ArrayRef<const CodeGenInstruction *> NumberedInstructions;
+	vector<const CodeGenInstruction *> NumberedInstructions;
+	CodeGenDAGPatterns CGDP;
+
+	// Info needed for register
+	struct ALFReg {
+		const CodeGenRegister* reg;
+		unsigned int bitwidth;
+	};
+
+	vector<ALFReg> RootRegs;
 
 
 public:
-	ALFWriterEmitter(RecordKeeper &R) : Records(R), Target(R)
+	ALFWriterEmitter(RecordKeeper &R) : Records(R), Target(R), CGDP(Records)
 	{
 	}
 
@@ -34,9 +45,102 @@ public:
 
 		/* outputPrintInstructionALF(O); */
 		outputALFRegisterDefinitions(O);
+		/* outputALFInstrMapping(O); */
 	}
 
+
 private:
+	void findInstrArguments(Record *R, vector<Record*> &inOps, vector<Record*> &outOps)
+	{
+		const DAGInstruction &daginst = CGDP.getInstruction(R);
+
+		for (unsigned i = 0, e = daginst.getNumResults(); i != e; ++i) {
+			outOps.push_back(daginst.getResult(i));
+		}
+		for (unsigned i = 0, e = daginst.getNumOperands(); i != e; ++i) {
+			inOps.push_back(daginst.getOperand(i));
+		}
+	}
+
+	SmallVector<StringRef, 2> findInstrALFOperation(Record *R)
+	{
+		SmallVector<StringRef, 2> result; 
+
+		const DAGInstruction &daginst = CGDP.getInstruction(R);
+		const std::string &InstName = R->getName().str();
+		auto treepattern = daginst.getPattern();
+		if (treepattern) {
+
+			/* 	// Look at specific pattern  (set <reg> (add <reg>, <other>)) */
+			/* 	// and pick the operation:				 ^^^ */
+			auto treepatternnode = treepattern->getOnlyTree();
+			if (treepatternnode) {
+				if (!treepatternnode->isLeaf()) {
+					/* O << treepatternnode->getOperator()->getName() << ", "; */
+					result.push_back(StringRef(treepatternnode->getOperator()->getName()));
+				}
+				if (treepatternnode->getNumChildren() == 2) {
+					auto child = treepatternnode->getChild(1);
+					if (child) {
+						if (!child->isLeaf()) {
+							/* O << child->getOperator()->getName(); */
+							result.push_back(StringRef(child->getOperator()->getName()));
+						}
+					}
+				}
+				/* for (unsigned i = 0, e = treepatternnode->getNumChildren(); i != e; ++i) { */
+				/* 	auto child = treepatternnode->getChild(i); */
+				/* 	if (child) { */
+				/* 		if (child->isLeaf()) */
+				/* 			O << *child->getLeafValue() << ", "; */
+				/* 		else */
+				/* 			O << child->getOperator()->getName(); */
+				/* 	} */
+				/* } */
+			}
+		}
+
+		return result;
+	}
+
+	unsigned int findBitSizeForRegClass(const CodeGenRegisterClass *rclass, raw_ostream &O)
+	{
+
+	}
+
+	// findBitSizeForRegClass
+	//
+
+	void outputALFInstrMapping(raw_ostream &O)
+	{
+		std::vector<Record*> Insts = Records.getAllDerivedDefinitions("Instruction");
+		for (std::vector<Record*>::iterator IC = Insts.begin(), EC = Insts.end();
+				IC != EC; ++IC) {
+			Record *R = *IC;
+			if (R->getValueAsString("Namespace") == "TargetOpcode" ||
+					R->getValueAsBit("isPseudo"))
+				continue;
+
+			const DAGInstruction &daginst = CGDP.getInstruction(R);
+			const std::string &InstName = R->getName().str();
+			O << InstName << ": ";
+			for (auto str : findInstrALFOperation(R)) {
+				O << str << ", ";
+			}
+			O << "ops:  ";
+
+			vector<Record*> inOps, outOps;
+			findInstrArguments(R, inOps, outOps);
+			O << "in: ";
+			for (auto i : inOps)
+				O << i->getName() << ", "; 
+			O << "out: ";
+			for (auto i : outOps)
+				O << i->getName() << ", "; 
+			O << "\n";
+		}
+	}
+
 	void outputALFRegisterDefinitions(raw_ostream &O)
 	{
   		CodeGenRegBank &RegBank = Target.getRegBank();
@@ -46,9 +150,10 @@ private:
 			ArrayRef<const CodeGenRegister*> Roots = RegBank.getRegUnit(i).getRoots();
 			assert(!Roots.empty() && "All regunits must have a root register.");
 			assert(Roots.size() <= 2 && "More than two roots not supported yet.");
-			
+
 			const CodeGenRegister *Reg = Roots.front();
 			
+			// get the first one, although there could be two root regs.. (?)
 			const StringRef &regName = getQualifiedName(Roots.front()->TheDef);
 			int64_t size = 0;
 
@@ -59,9 +164,16 @@ private:
 				}
 			}
 
-			// print the ALF register frame.
+			// skip is zero regwidth
 			if (size == 0)
 				continue;
+
+			// add to RootRegs vector for other methods
+			ALFReg alfr;
+			alfr.reg = Roots.front();
+			alfr.bitwidth = size;
+			RootRegs.push_back(alfr);
+			
  			// If size was null we could not find any register class for the register
 			O << "  { alloc " << size/8 <<  " \"" << regName << "\" " << size << " } // ";
 
@@ -72,11 +184,16 @@ private:
 				for (const auto &RC : RegBank.getRegClasses()) {
 					if (RC.getDef() && RC.contains(Reg)) {
 						O << RC.getName() << ":" << RC.getDef()->getValueAsInt("Alignment") << ", ";
+
+						/* O << "\n"; */
+						/* O << "    rclass: " << RC.getName() << "  "; */
+						/* O << "superclasses: "; */
+						/* findBitSizeForRegClass(&RC, O); */
+						/* O << "\n"; */
 					}
 				}
 				O << "\n";
 			}
-			
 		}
 	}
 
