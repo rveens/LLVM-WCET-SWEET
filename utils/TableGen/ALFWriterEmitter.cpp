@@ -43,11 +43,11 @@ public:
 		/* outputCortexM0AssemblerPredicatesTEST(O); */
 		/* outputCortexM0InstrsTEST(O); */
 
-		/* outputALFRegisterDefinitions(O); */
+		/* outputALFRegisterDefinitionsTEST(O); */
 		/* outputALFInstrMapping(O); */
 
-		outputPrintInstructionALF(O);
 		outputRegDefALF(O);
+		outputPrintInstructionALF(O);
 	}
 
     /* case ARM::tSUBspi: { */
@@ -96,18 +96,6 @@ public:
 
 
 private:
-	void findInstrArguments(Record *R, vector<Record*> &inOps, vector<Record*> &outOps)
-	{
-		const DAGInstruction &daginst = CGDP.getInstruction(R);
-
-		for (unsigned i = 0, e = daginst.getNumResults(); i != e; ++i) {
-			outOps.push_back(daginst.getResult(i));
-		}
-		for (unsigned i = 0, e = daginst.getNumOperands(); i != e; ++i) {
-			inOps.push_back(daginst.getOperand(i));
-		}
-	}
-
 	SmallVector<StringRef, 2> findInstrALFOperation(Record *R)
 	{
 		SmallVector<StringRef, 2> result; 
@@ -149,13 +137,45 @@ private:
 		return result;
 	}
 
-	unsigned int findBitSizeForRegClass(const CodeGenRegisterClass *rclass, raw_ostream &O)
+	bool findInstrPatternInfo(Record *R, StringRef &operation, vector<Init*> &ops)
 	{
+		const DAGInstruction &daginst = CGDP.getInstruction(R);
+		const std::string &InstName = R->getName().str();
+		auto treepattern = daginst.getPattern();
+		if (treepattern) {
 
+			/* 	// Look at specific pattern  (set <reg> (add <reg>, <other>)) */
+			/* 	// and pick the operation:				 ^^^ */
+			auto treepatternnode = treepattern->getOnlyTree();
+			if (treepatternnode) {
+				if (!treepatternnode->isLeaf()) { // set
+				}
+				if (treepatternnode->getNumChildren() == 2) { // e.g.: reg, (add .. .. )
+					auto targetRegChild = treepatternnode->getChild(0); // reg,
+					if (targetRegChild->isLeaf())
+						ops.push_back(targetRegChild->getLeafValue()); //ops[0]
+					auto operationChild = treepatternnode->getChild(1); // (add .. .. )
+					if (operationChild) {
+						if (!operationChild->isLeaf()) { 
+							operation = operationChild->getOperator()->getName();  // add 
+
+							if (operationChild->getNumChildren() == 2) {
+								if (operationChild->getChild(0)->isLeaf()) {
+									ops.push_back(operationChild->getChild(0)->getLeafValue()); // ops[1]
+								}
+								if (operationChild->getChild(1)->isLeaf()) {
+									ops.push_back(operationChild->getChild(1)->getLeafValue()); // ops[2]
+								}
+								return true;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return false;
 	}
-
-	// findBitSizeForRegClass
-	//
 
 	void outputALFInstrMapping(raw_ostream &O)
 	{
@@ -225,7 +245,7 @@ private:
 		O << "}\n";
 	}
 
-	void outputALFRegisterDefinitions(raw_ostream &O)
+	void outputALFRegisterDefinitionsTEST(raw_ostream &O)
 	{
   		CodeGenRegBank &RegBank = Target.getRegBank();
 		RegBank.computeDerivedInfo();
@@ -252,28 +272,15 @@ private:
 			if (size == 0)
 				continue;
 
-			// add to RootRegs vector for other methods
-			ALFReg alfr;
-			alfr.reg = Roots.front();
-			alfr.bitwidth = size;
-			RootRegs.push_back(alfr);
-			
- 			// If size was null we could not find any register class for the register
-			O << "  { alloc " << size/8 <<  " \"" << regName << "\" " << size << " } // ";
+			O << regName << "  ";
 
-			// print the register classes and their size as a comment
+			// print the register classes 
 			if (RegBank.getRegClasses().empty())
 				O << "\n";
 			else {
 				for (const auto &RC : RegBank.getRegClasses()) {
 					if (RC.getDef() && RC.contains(Reg)) {
-						O << RC.getName() << ":" << RC.getDef()->getValueAsInt("Alignment") << ", ";
-
-						/* O << "\n"; */
-						/* O << "    rclass: " << RC.getName() << "  "; */
-						/* O << "superclasses: "; */
-						/* findBitSizeForRegClass(&RC, O); */
-						/* O << "\n"; */
+						O << RC.getName() << ", ";
 					}
 				}
 				O << "\n";
@@ -281,13 +288,81 @@ private:
 		}
 	}
 
+	void findInstrArguments(Record *R, vector<Record*> &inOps, vector<Record*> &outOps)
+	{
+		const DAGInstruction &daginst = CGDP.getInstruction(R);
+
+		for (unsigned i = 0, e = daginst.getNumResults(); i != e; ++i) {
+			outOps.push_back(daginst.getResult(i));
+		}
+		for (unsigned i = 0, e = daginst.getNumOperands(); i != e; ++i) {
+			inOps.push_back(daginst.getOperand(i));
+		}
+	}
+
+
 	void buildCaseMItoALF(raw_ostream &O, const CodeGenInstruction *I)
 	{
-		O << "      alfbb.addStatement("; 
-		  O << "\"" << I->TheDef->getName() << "\"" << ", ";
-		  O << "\"" << I->TheDef->getName() << "\"" << ", ";
-		  O << "SExpr(\"test\")" << ");\n";
+		/* O << "      alfbb.addStatement("; */ 
+		/*   O << "\"" << I->TheDef->getName() << "\"" << ", "; */
+		/*   O << "\"" << I->TheDef->getName() << "\"" << ", "; */
+		/*   O << "SExpr(\"test\")" << ");\n"; */
 
+		/* SExpr *expr; */
+
+		/* const DAGInstruction &daginst = CGDP.getInstruction(R); */
+
+		/* // TODO: */ 
+		/* // Consider one simple pattern e.g. add $1, $2, $3. extend later. */
+		/* // 1) get access to operands. Discriminate between input and output. */
+		/* // 2) get access to operand values during run-time */
+		/* // 3) create Expr */
+
+		/* // for 1) use I, daginst and MI.operands ?? */
+
+		/* // (outs) */
+		/* for (unsigned i = 0, e = daginst.getNumResults(); i != e; ++i) { */
+		/* 	daginst.getResult(i); // record of operand */
+		/* } */
+		/* // (ins) */
+		/* for (unsigned i = 0, e = daginst.getNumOperands(); i != e; ++i) { */
+		/* 	daginst.getOperand(i); // record of operand */
+		/* } */
+
+		/* int index = 0; */
+		/* for (auto op : MI.operands()) { */
+		/* 	const MCOperandInfo &MCOI = MI.getDesc().OpInfo[index]; */
+		/* 	if (MCOI.isPredicate()) */
+		/* 	  continue; */
+		/* 	index++; */
+
+		/* 	if (op.isReg()) { */
+		/* 	  dbgs() << TRI->getName(op.getReg()); */
+		/* 	} else if (op.isImm()) { */
+		/* 	  dbgs() << op.getImm(); */
+		/* 	} */
+		/*     dbgs() << "\n"; */
+		/* } */
+
+		/* if (index == 2) { */
+		/* 	for (auto op : MI.operands()) { */
+		/* 		const MCOperandInfo &MCOI = MI.getDesc().OpInfo[index]; */
+		/* 		if (MCOI.isPredicate()) */
+		/* 		  continue; */
+		/* 		if (op.isReg()) { */
+		/* 		  dbgs() << TRI->getName(op.getReg()); */
+		/* 		} else if (op.isImm()) { */
+		/* 		  dbgs() << op.getImm(); */
+		/* 		} */
+		/* 	} */
+		/* } */
+
+		/* dbgs() << "numops: " << (index==0 ? 0 : index-1) << "\n"; */
+
+		/* SExpr *op1 = ctx->load(32, std::string("kek")); */
+		/* SExpr *op2 = ctx->load(32, std::string("kek1")); */
+        /* SExpr *expr = ctx->sub(32, op1, op2, 0); */
+		/* alfbb.addStatement("test", "test", expr); */
 	}
 
 	void outputPrintInstructionALF(raw_ostream &O)
@@ -343,9 +418,56 @@ private:
 
 				/* buildCaseMItoALF(O, I); */
 
+				/* Record *R, StringRef &operation, SmallVector<Init*, 3> &ops */
+				StringRef oper;
+				vector<Init*> ops;
+				if (findInstrPatternInfo(I->TheDef, oper, ops)) {
+
+				// assume first reg is target, then next two reg or imm are operands.
+				O << "      std::string targetReg;\n";
+				O << "      SExpr *op1, *op2;\n";
+
+				O << "      int index = 0;\n";
+				O << "      int regOrImm_counter = 0;\n";
+				O << "      for (auto &op : MI.operands()) {\n";
+				O << "        const MCOperandInfo &MCOI = MI.getDesc().OpInfo[index];\n";
+				O << "        if (MCOI.isPredicate())\n";
+				O << "        	continue;\n";
+				O << "        if (op.isReg()) {\n";
+				O << "          if (TRI->getName(op.getReg()) == StringRef(\"CPSR\"))\n";
+				O << "            continue;\n";
+				O << "        	if (regOrImm_counter == 0)\n";
+				O << "        		targetReg = TRI->getName(op.getReg());\n";
+				O << "        	if (regOrImm_counter == 1)\n";
+				O << "        		op1 = ctx->load(32, TRI->getName(op.getReg()));\n";
+				O << "        	if (regOrImm_counter == 2)\n";
+				O << "        		op2 = ctx->load(32, TRI->getName(op.getReg()));\n";
+				O << "        	regOrImm_counter++;\n";
+				O << "        } else if (op.isImm()) {\n";
+				O << "        	if (regOrImm_counter == 1)\n";
+				O << "        		op1 = ctx->dec_unsigned(32, op.getImm());\n";
+				O << "        	if (regOrImm_counter == 2) \n";
+				O << "        		op2 = ctx->dec_unsigned(32, op.getImm());\n";
+				O << "        	regOrImm_counter++;\n";
+				O << "        }\n";
+				O << "        index++;\n";
+				O << "      }\n";
+
+				O << "      SExpr *expr;\n";
+				if (oper == "sub") {
+				O << "      expr = ctx->sub(32, op1, op2, 0);\n";
+				} else if (oper == "add") {
+				O << "      expr = ctx->add(32, op1, op2, 0);\n";
+				}
+
+				O << "      if (expr) {\n";
+				O << "        SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
+				O << "        alfbb.addStatement(\"test\", \"test\", stor);\n";
+				O << "      }\n";
+				}
+
 				O << "      break;\n";
 				O << "    }\n";
-
 
 				int OpIdx = 0;
 				for (auto &opInfo : I->Operands.OperandList) {

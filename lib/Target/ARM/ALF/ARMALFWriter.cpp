@@ -1,5 +1,8 @@
 #include "ARMALFWriter.h"
 
+#include <string>
+
+#include "llvm/Support/raw_ostream.h"
 #include "ARMGenALFWriter.inc"
 
 bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
