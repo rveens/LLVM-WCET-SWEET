@@ -18,7 +18,7 @@ namespace {
 			bool runOnMachineFunction(MachineFunction &MF) override;
 
 			// Table'gen'd
-			void printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx);
+			void printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label);
 			void regDefALF(ALFBuilder &b);
 	};
 	char ARMALFWriter::ID = 0;

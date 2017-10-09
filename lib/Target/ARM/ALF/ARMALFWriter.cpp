@@ -3,13 +3,22 @@
 #include <string>
 
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/FileSystem.h"
 #include "ARMGenALFWriter.inc"
 
 bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 {
 	const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
 
-	ALFOutput o(dbgs(), 8);
+	std::string Filename = "arm.alf";
+
+	std::error_code EC;
+	raw_fd_ostream File(Filename, EC, sys::fs::F_Text);
+
+	if (EC)
+		return false;
+
+	ALFOutput o(File, 8);
 	ALFBuilder b(o);
 
 	b.setBitWidths(32, 32, 32);
@@ -22,11 +31,14 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 
 
 	for (MachineBasicBlock &mbb : MF) {
-		auto alfbb = alffunc->addBasicBlock(mbb.getName(), "test");
+		unsigned instrCounter = 0;
+		auto alfbb = alffunc->addBasicBlock(mbb.getFullName() + std::to_string(instrCounter), mbb.getFullName() + std::to_string(instrCounter));
 		/* dbgs() << mbb.getFullName() << "\n\n"; */
 		for (MachineInstr &mi : mbb) {
 			/* dbgs() << ">>>" << TII->getName(mi.getOpcode()) << "\n"; */
-			printInstructionALF(mi, *alfbb, alffunc); // TableGen
+			string labelName = mbb.getFullName() + std::to_string(instrCounter);
+			printInstructionALF(mi, *alfbb, alffunc, labelName); // TableGen
+			instrCounter++;
 		}
 		/* dbgs() << "\n"; */
 	}
