@@ -235,12 +235,12 @@ private:
 	{
 		if (operatorNames.size() >= 2 &&
 				operatorNames[0] == "set") { 
+			O << "      ALFStatement *statement;\n";
+			O << "      std::string targetReg;\n";
+			O << "      std::vector<SExpr *> alfOps;\n";
 			// one argument
 			if (operatorNames[1] == "imm") {
 				// assume first reg is target, then next two reg or imm are operands.
-				O << "      std::string targetReg;\n";
-				O << "      std::vector<SExpr *> alfOps;\n";
-
 				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
 
 				O << "      for (auto mcop : { MI.getOperand(" << indexesForMI[1] << ") } ) {\n";
@@ -251,21 +251,14 @@ private:
 				O << "        }\n";
 				O << "      }\n";
 
-				O << "      SExpr *expr;\n";
+				O << "      SExpr *expr = alfOps[0];\n";
 
-				O << "      expr = alfOps[0];\n";
+				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
+				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
 
-				O << "      if (expr) {\n";
-				O << "        SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
-				O << "        alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
-				O << "      }\n";
-
-				/* make_NZCV(O); */
+			// two arguments
 			} else if (operatorNames[1] == "add") {
 				// assume first reg is target, then next two reg or imm are operands.
-				O << "      std::string targetReg;\n";
-				O << "      std::vector<SExpr *> alfOps;\n";
-
 				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
 
 				O << "      for (auto mcop : { MI.getOperand(" << indexesForMI[1] << "), MI.getOperand(" << indexesForMI[2] << ") } ) {\n";
@@ -276,18 +269,15 @@ private:
 				O << "        }\n";
 				O << "      }\n";
 
-				O << "      SExpr *expr;\n";
-				O << "      expr = ctx->add(32, alfOps[0], alfOps[1], 0);\n";
+				O << "      SExpr *expr = ctx->add(32, alfOps[0], alfOps[1], 0);\n";
 
-				O << "      if (expr) {\n";
-				O << "        SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
-				O << "        alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
-				O << "      }\n";
+				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
+				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
 
-				/* make_NZCV(O); */
 			} else {
 				O << "      goto default_label;\n";
 			}
+			O << "      customCodeAfterSET(alfbb, ctx, statement, targetReg, alfOps);\n";
 		} else {
 			O << "      goto default_label;\n";
 		}
