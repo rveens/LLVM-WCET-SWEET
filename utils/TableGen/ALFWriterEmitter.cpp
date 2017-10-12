@@ -53,7 +53,7 @@ public:
 	}
 
 private:
-	void findTreePatternOpNames(TreePatternNode *n, std::vector<string> &output)
+	void findTreePatternLeafNames(TreePatternNode *n, std::vector<string> &output)
 	{
 		if (!n)
 			return;
@@ -64,18 +64,31 @@ private:
 		if (!n->isLeaf()) {
 			if (n->getNumChildren() != 0) {
 				for (unsigned i = 0, e = n->getNumChildren(); i != e; ++i) {
-					findTreePatternOpNames(n->getChild(i), output);
+					findTreePatternLeafNames(n->getChild(i), output);
 				}
 			}
 		}
 	}
 
-	bool findInstrPatternInfo(const CodeGenInstruction *I, StringRef &operation, vector<int> &opsMap)
+	void findTreePatternOperatorNames(TreePatternNode *n, std::vector<string> &output)
 	{
-		const DAGInstruction &daginst = CGDP.getInstruction(I->TheDef);
-		const std::string &InstName = I->TheDef->getName().str();
-		auto treepattern = daginst.getPattern();
+		if (!n)
+			return;
 
+		if (!n->isLeaf()) {
+			if (!n->getOperator()->getName().empty())
+				output.push_back(n->getOperator()->getName());
+
+			if (n->getNumChildren() != 0) {
+				for (unsigned i = 0, e = n->getNumChildren(); i != e; ++i) {
+					findTreePatternOperatorNames(n->getChild(i), output);
+				}
+			}
+		}
+	}
+
+	void findMachineInstrIndexes_ForPattern(const CodeGenInstruction *I, vector<int> &indexesForMI, vector<string> &operatorNames)
+	{
 		// find the Machineinstr. indexes of the $named values of the Pattern field.
 		// example:
 		//
@@ -90,40 +103,60 @@ private:
 		// Rd:0
 		// Rm:2
 		// imm0_7:3
-				
+		//
+		const DAGInstruction &daginst = CGDP.getInstruction(I->TheDef);
+		const std::string &InstName = I->TheDef->getName().str();
+		auto treepattern = daginst.getPattern();
+
 		// opsMap[index_of_pattern_$operand] = index_of_machineinstr_operand
-		/* if (treepattern) { */
-		/* 	auto tpn = treepattern->getOnlyTree(); */
-		/* 	if (tpn) { */
-		/* 		/1* dbgs() << InstName << ": "; *1/ */
-		/* 		std::vector<string> patOps; */
-		/* 		findTreePatternOpNames(tpn, patOps); */
-		/* 		/1* for (auto str : patOps) *1/ */
-		/* 		/1* 	dbgs() << str << ", "; *1/ */
-		
-		/* 		/1* dbgs() << "\n"; *1/ */
+		if (treepattern) {
+			auto tpn = treepattern->getOnlyTree();
+			if (tpn) {
+				dbgs() << InstName << ": ";
+				std::vector<string> patOps;
+				findTreePatternLeafNames(tpn, patOps);
+				for (auto str : patOps)
+					dbgs() << str << ", ";
 
-		/* 		/1* for (unsigned i = 0, e = I->Operands.size(); i != e; ++i) { *1/ */
-		/* 		/1* 	string op = I->Operands[i].Name; *1/ */
-		/* 		/1* 	dbgs() << op << ", "; *1/ */
-		/* 		/1* } *1/ */
-		/* 		/1* dbgs() << "\n"; *1/ */
+				dbgs() << "\n";
 
-		/* 		// loop through the full set of operands, find the index of the pattern name */
-		/* 		for (int j = 0; j < patOps.size(); j++) { */
-		/* 			for (unsigned i = 0, e = I->Operands.size(); i != e; ++i) { */
-		/* 				string op = I->Operands[i].Name; */
-		/* 				if (op == patOps[j]) { */
-		/* 					opsMap.push_back(i); */
-		/* 				} */
-		/* 			} */
-		/* 		} */
-				
-		/* 		/1* for (int i = 0 ; i < opsMap.size(); i++) { *1/ */
-		/* 		/1* 	dbgs() << i << ": " << opsMap[i] << "\n"; *1/ */
-		/* 		/1* } *1/ */
-		/* 	} */
-		/* } */
+				// small test beg
+				findTreePatternOperatorNames(tpn, operatorNames);
+				dbgs() << "operators: ";
+				for (auto str : operatorNames)
+					dbgs() << str << ", ";
+
+				dbgs() << "\n";
+				// small test end
+
+				for (unsigned i = 0, e = I->Operands.size(); i != e; ++i) {
+					string op = I->Operands[i].Name;
+					dbgs() << op << ", ";
+				}
+				dbgs() << "\n";
+
+				// loop through the full set of operands, find the index of the pattern name
+				for (int j = 0; j < patOps.size(); j++) {
+					for (unsigned i = 0, e = I->Operands.size(); i != e; ++i) {
+						string op = I->Operands[i].Name;
+						if (op == patOps[j]) {
+							indexesForMI.push_back(i);
+						}
+					}
+				}
+
+				for (int i = 0 ; i < indexesForMI.size(); i++) {
+					dbgs() << i << ": " << indexesForMI[i] << "\n";
+				}
+			}
+		}
+	}
+
+	bool findInstrPatternInfo(const CodeGenInstruction *I, StringRef &operation)
+	{
+		const DAGInstruction &daginst = CGDP.getInstruction(I->TheDef);
+		const std::string &InstName = I->TheDef->getName().str();
+		auto treepattern = daginst.getPattern();
 
 		if (treepattern) {
 
@@ -197,6 +230,89 @@ private:
 
 		O << "}\n";
 	}
+	
+	void make_case(raw_ostream &O, std::vector<int> indexesForMI, vector<string> operatorNames)
+	{
+		if (operatorNames.size() >= 2 &&
+				operatorNames[0] == "set") { 
+			// one argument
+			if (operatorNames[1] == "imm") {
+				// assume first reg is target, then next two reg or imm are operands.
+				O << "      std::string targetReg;\n";
+				O << "      std::vector<SExpr *> alfOps;\n";
+
+				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
+
+				O << "      for (auto mcop : { MI.getOperand(" << indexesForMI[1] << ") } ) {\n";
+				O << "        if (mcop.isReg()) {\n";
+				O << "          alfOps.push_back(ctx->load(32, TRI->getName(mcop.getReg())));\n";
+				O << "        } else if (mcop.isImm()) {\n";
+				O << "          alfOps.push_back(ctx->dec_unsigned(32, mcop.getImm()));\n";
+				O << "        }\n";
+				O << "      }\n";
+
+				O << "      SExpr *expr;\n";
+
+				O << "      expr = alfOps[0];\n";
+
+				O << "      if (expr) {\n";
+				O << "        SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
+				O << "        alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+				O << "      }\n";
+
+				/* make_NZCV(O); */
+			} else if (operatorNames[1] == "add") {
+				// assume first reg is target, then next two reg or imm are operands.
+				O << "      std::string targetReg;\n";
+				O << "      std::vector<SExpr *> alfOps;\n";
+
+				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
+
+				O << "      for (auto mcop : { MI.getOperand(" << indexesForMI[1] << "), MI.getOperand(" << indexesForMI[2] << ") } ) {\n";
+				O << "        if (mcop.isReg()) {\n";
+				O << "          alfOps.push_back(ctx->load(32, TRI->getName(mcop.getReg())));\n";
+				O << "        } else if (mcop.isImm()) {\n";
+				O << "          alfOps.push_back(ctx->dec_unsigned(32, mcop.getImm()));\n";
+				O << "        }\n";
+				O << "      }\n";
+
+				O << "      SExpr *expr;\n";
+				O << "      expr = ctx->add(32, alfOps[0], alfOps[1], 0);\n";
+
+				O << "      if (expr) {\n";
+				O << "        SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
+				O << "        alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+				O << "      }\n";
+
+				/* make_NZCV(O); */
+			} else {
+				O << "      goto default_label;\n";
+			}
+		} else {
+			O << "      goto default_label;\n";
+		}
+	}
+
+	void make_NZCV(raw_ostream &O)
+	{
+		O << "\n";
+		O << "        alfbb.addStatement(\"\", TII->getName(MI.getOpcode()), stor);\n";
+		O << "        SExpr *expr_nzcv = ctx->conc(2, 30,\n";
+		O << "          ctx->conc(1, 1, \n";
+		O << "            ctx->if_(1, \n";
+		O << "          	  ctx->s_lt(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)),\n";
+		O << "          	  ctx->dec_unsigned(1, 1),\n";
+		O << "          	  ctx->dec_unsigned(1, 0)),\n";
+		O << "            ctx->if_(1, \n";
+		O << "          	  ctx->eq(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)),\n";
+		O << "          	  ctx->dec_unsigned(1, 1),\n";
+		O << "          	  ctx->dec_unsigned(1, 0))\n";
+		O << "          ),\n";
+		O << "          ctx->dec_unsigned(30, 0)\n";
+		O << "        );\n";
+		O << "        SExpr *stor_nzcv = ctx->store(ctx->address(\"APSR_NZCV\"), expr_nzcv); \n";
+		O << "        alfbb.addStatement(label+\"NZCV\", \"setting NZCV status flags\", stor_nzcv);\n";
+	}
 
 	void outputPrintInstructionALF(raw_ostream &O)
 	{
@@ -221,62 +337,40 @@ private:
 			/* 	continue; */
 			if (!I->AsmString.empty() && I->TheDef->getName() != "PHI") {
 
-
 				/* Record *R, StringRef &operation, SmallVector<Init*, 3> &ops */
-				StringRef oper;
-				vector<int> ops;
-				if (findInstrPatternInfo(I, oper, ops)) {
-					const std::string &InstName = I->TheDef->getName().str();
-					O << "    case " << I->Namespace << "::" << InstName << ": {\n";
+				/* StringRef oper; */
+				/* vector<int> ops; */
+				/* if (findInstrPatternInfo(I, oper)) { */
+				const std::string &InstName = I->TheDef->getName().str();
+				O << "    case " << I->Namespace << "::" << InstName << ": {\n";
 
-					// assume first reg is target, then next two reg or imm are operands.
-					O << "      std::string targetReg;\n";
-					O << "      SExpr *op1, *op2;\n";
+				std::vector<int> indexesForMI;
+				vector<string> operatorNames;
+				findMachineInstrIndexes_ForPattern(I, indexesForMI, operatorNames);
 
-					O << "      int index = 0;\n";
-					O << "      int regOrImm_counter = 0;\n";
-					O << "      for (auto &op : MI.operands()) {\n";
-					O << "        const MCOperandInfo &MCOI = MI.getDesc().OpInfo[index];\n";
-					O << "        if (MCOI.isPredicate())\n";
-					O << "        	continue;\n";
-					O << "        if (op.isReg()) {\n";
-					O << "          if (TRI->getName(op.getReg()) == StringRef(\"CPSR\"))\n";
-					O << "            continue;\n";
-					O << "        	if (regOrImm_counter == 0)\n";
-					O << "        		targetReg = TRI->getName(op.getReg());\n";
-					O << "        	if (regOrImm_counter == 1)\n";
-					O << "        		op1 = ctx->load(32, TRI->getName(op.getReg()));\n";
-					O << "        	if (regOrImm_counter == 2)\n";
-					O << "        		op2 = ctx->load(32, TRI->getName(op.getReg()));\n";
-					O << "        	regOrImm_counter++;\n";
-					O << "        } else if (op.isImm()) {\n";
-					O << "        	if (regOrImm_counter == 1)\n";
-					O << "        		op1 = ctx->dec_unsigned(32, op.getImm());\n";
-					O << "        	if (regOrImm_counter == 2) \n";
-					O << "        		op2 = ctx->dec_unsigned(32, op.getImm());\n";
-					O << "        	regOrImm_counter++;\n";
-					O << "        }\n";
-					O << "        index++;\n";
-					O << "      }\n";
-
-					O << "      SExpr *expr;\n";
-					if (oper == "sub") {
-						O << "      expr = ctx->sub(32, op1, op2, 0);\n";
-					} else if (oper == "add") {
-						O << "      expr = ctx->add(32, op1, op2, 0);\n";
-					} else if (oper == "set") { 
-						O << "      expr = ctx->add(32, op1, op2, 0);\n";
-					}
-
-					O << "      if (expr) {\n";
-					O << "        SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
-					O << "        alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
-					O << "      }\n";
-
-					O << "      break;\n";
-					O << "    }\n";
+				const DAGInstruction &daginst = CGDP.getInstruction(I->TheDef);
+				auto treepattern = daginst.getPattern();
+				if (treepattern) {
+					O << "      // ";
+					treepattern->print(O);
+					O << "\n";
 				}
+				O << "      //indexesForMI ";
+				for (auto i : indexesForMI) {
+					O << to_string(i) << " ";
+				}
+			  	O << "\n";
 
+				O << "      //operatorNames ";
+				for (auto s : operatorNames) {
+					O << s << " ";
+				}
+			  	O << "\n";
+
+				make_case(O, indexesForMI, operatorNames);
+
+				O << "      break;\n";
+				O << "    }\n";
 
 				int OpIdx = 0;
 				for (auto &opInfo : I->Operands.OperandList) {
@@ -291,6 +385,7 @@ private:
 
 		// Default case: unhandled opcode
 		O << "    default: {\n";
+		O << "      default_label:\n";
 		O << "        alfbb.addStatement(label, TII->getName(MI.getOpcode()), ctx->null());\n";
 		O << "    }\n";
 		O << "  }\n";

@@ -203,6 +203,33 @@ public:
                              ->append(lref(Twine(Id)))
                              ->append(offset(Offset));
     }
+    SExpr* if_(unsigned BitWidth, SExpr *Cond, SExpr *IfTrueStat, SExpr *IfFalseStat) {
+        return list("if")
+                ->append(BitWidth)
+                ->append(Cond)
+                ->append(IfTrueStat)
+                ->append(IfFalseStat);
+    }
+    SExpr* eq(unsigned BitWidth, SExpr *Op1, SExpr *Op2) {
+        return list("eq")
+                ->append(BitWidth)
+                ->append(Op1)
+                ->append(Op2);
+    }
+    SExpr* s_lt(unsigned BitWidth, SExpr *Op1, SExpr *Op2) {
+        return list("s_lt")
+                ->append(BitWidth)
+                ->append(Op1)
+                ->append(Op2);
+    }
+    SExpr* conc(unsigned BitWidth1, unsigned BitWidth2, SExpr *Op1, SExpr *Op2) {
+        return list("conc")
+                ->append(BitWidth1)
+                ->append(BitWidth2)
+                ->append(Op1)
+                ->append(Op2);
+    }
+
 };
 
 enum ALFSExprTypes { GenericSExpr = 0, ALFAddressSExpr = 1, ALFBegin = ALFAddressSExpr, ALFEnd = ALFAddressSExpr };
