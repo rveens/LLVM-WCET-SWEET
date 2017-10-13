@@ -392,6 +392,7 @@ ComplexPattern::ComplexPattern(Record *R) {
   NumOperands = R->getValueAsInt("NumOperands");
   SelectFunc  = R->getValueAsString("SelectFunc");
   RootNodes   = R->getValueAsListOfDefs("RootNodes");
+  Rec   = R;
 
   // FIXME: This is a hack to statically increase the priority of patterns which
   // maps a sub-dag to a complex pattern. e.g. favors LEA over ADD. To get best

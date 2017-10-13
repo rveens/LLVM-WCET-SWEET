@@ -1122,4 +1122,5 @@ class ComplexPattern<ValueType ty, int numops, string fn,
   list<SDNode> RootNodes = roots;
   list<SDNodeProperty> Properties = props;
   int Complexity = complexity;
+  string ALFCustomMethod = "";
 }

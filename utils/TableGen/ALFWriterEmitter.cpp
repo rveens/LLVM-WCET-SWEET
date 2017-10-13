@@ -53,41 +53,41 @@ public:
 	}
 
 private:
-	void findTreePatternLeafNames(TreePatternNode *n, std::vector<string> &output)
+	void findTreePatternLeafs(TreePatternNode *n, std::vector<TreePatternNode *> &output)
 	{
 		if (!n)
 			return;
 
 		if (!n->getName().empty())
-			output.push_back(n->getName());
+			output.push_back(n);
 
 		if (!n->isLeaf()) {
 			if (n->getNumChildren() != 0) {
 				for (unsigned i = 0, e = n->getNumChildren(); i != e; ++i) {
-					findTreePatternLeafNames(n->getChild(i), output);
+					findTreePatternLeafs(n->getChild(i), output);
 				}
 			}
 		}
 	}
 
-	void findTreePatternOperatorNames(TreePatternNode *n, std::vector<string> &output)
+	void findTreePatternOperators(TreePatternNode *n, std::vector<TreePatternNode *> &output)
 	{
 		if (!n)
 			return;
 
 		if (!n->isLeaf()) {
-			if (!n->getOperator()->getName().empty())
-				output.push_back(n->getOperator()->getName());
+			if (n->getOperator())
+				output.push_back(n);
 
 			if (n->getNumChildren() != 0) {
 				for (unsigned i = 0, e = n->getNumChildren(); i != e; ++i) {
-					findTreePatternOperatorNames(n->getChild(i), output);
+					findTreePatternOperators(n->getChild(i), output);
 				}
 			}
 		}
 	}
 
-	void findMachineInstrIndexes_ForPattern(const CodeGenInstruction *I, vector<int> &indexesForMI, vector<string> &operatorNames)
+	void findMachineInstrIndexes_ForPattern(const CodeGenInstruction *I, vector<int> &indexesForMI, vector<TreePatternNode*> &operators, vector<TreePatternNode*> &leafs)
 	{
 		// find the Machineinstr. indexes of the $named values of the Pattern field.
 		// example:
@@ -113,18 +113,21 @@ private:
 			auto tpn = treepattern->getOnlyTree();
 			if (tpn) {
 				dbgs() << InstName << ": ";
-				std::vector<string> patOps;
-				findTreePatternLeafNames(tpn, patOps);
-				for (auto str : patOps)
-					dbgs() << str << ", ";
+				std::vector<string> leafNames;
+				findTreePatternLeafs(tpn, leafs);
+				for (auto tpn : leafs) {
+					leafNames.push_back(tpn->getName());
+					dbgs() << tpn->getName() << ", ";
+				}
 
 				dbgs() << "\n";
 
 				// small test beg
-				findTreePatternOperatorNames(tpn, operatorNames);
+				findTreePatternOperators(tpn, operators);
 				dbgs() << "operators: ";
-				for (auto str : operatorNames)
-					dbgs() << str << ", ";
+				for (auto tpn : operators) {
+					dbgs() << tpn->getOperator()->getName() << ", ";
+				}
 
 				dbgs() << "\n";
 				// small test end
@@ -136,10 +139,10 @@ private:
 				dbgs() << "\n";
 
 				// loop through the full set of operands, find the index of the pattern name
-				for (int j = 0; j < patOps.size(); j++) {
+				for (int j = 0; j < leafNames.size(); j++) {
 					for (unsigned i = 0, e = I->Operands.size(); i != e; ++i) {
 						string op = I->Operands[i].Name;
-						if (op == patOps[j]) {
+						if (op == leafNames[j]) {
 							indexesForMI.push_back(i);
 						}
 					}
@@ -150,47 +153,6 @@ private:
 				}
 			}
 		}
-	}
-
-	bool findInstrPatternInfo(const CodeGenInstruction *I, StringRef &operation)
-	{
-		const DAGInstruction &daginst = CGDP.getInstruction(I->TheDef);
-		const std::string &InstName = I->TheDef->getName().str();
-		auto treepattern = daginst.getPattern();
-
-		if (treepattern) {
-
-			/* 	// Look at specific pattern  (set <reg> (add <reg>, <other>)) */
-			/* 	// and pick the operation:				 ^^^ */
-			auto treepatternnode = treepattern->getOnlyTree();
-			if (treepatternnode) {
-				if (!treepatternnode->isLeaf()) { // set
-				}
-				if (treepatternnode->getNumChildren() == 2) { // e.g.: reg, (add .. .. )
-					auto targetRegChild = treepatternnode->getChild(0); // reg,
-					/* if (targetRegChild->isLeaf()) */
-						//ops.push_back(targetRegChild->getLeafValue()); //ops[0]
-					auto operationChild = treepatternnode->getChild(1); // (add .. .. )
-					if (operationChild) {
-						if (!operationChild->isLeaf()) { 
-							operation = operationChild->getOperator()->getName();  // add 
-
-							if (operationChild->getNumChildren() == 2) {
-								if (operationChild->getChild(0)->isLeaf()) {
-									/* ops.push_back(operationChild->getChild(0)->getLeafValue()); // ops[1] */
-								}
-								if (operationChild->getChild(1)->isLeaf()) {
-									/* ops.push_back(operationChild->getChild(1)->getLeafValue()); // ops[2] */
-								}
-								return true;
-							}
-						}
-					}
-				}
-			}
-		}
-
-		return false;
 	}
 
 	void outputRegDefALF(raw_ostream &O)
@@ -227,12 +189,21 @@ private:
 
 			O << "  b.addFrame(\"" << regName << "\", " << size << ", InternalFrame);\n";
 		}
+		// add frame representing the memory
+		O << "  b.addInfiniteFrame(\"mem\", InternalFrame);\n";
 
 		O << "}\n";
 	}
 	
-	void make_case(raw_ostream &O, std::vector<int> indexesForMI, vector<string> operatorNames)
+	void make_case(raw_ostream &O, std::vector<int> indexesForMI, vector<TreePatternNode*> operators, vector<TreePatternNode*> leafs)
 	{
+		// collect names of the operators
+		vector<string> operatorNames;
+		for (auto tpn : operators) {
+			operatorNames.push_back(tpn->getOperator()->getName());
+		}
+
+		// do something for set ... 
 		if (operatorNames.size() >= 2 &&
 				operatorNames[0] == "set") { 
 			O << "      ALFStatement *statement;\n";
@@ -240,7 +211,7 @@ private:
 			O << "      std::vector<SExpr *> alfOps;\n";
 			// one argument
 			if (operatorNames[1] == "imm") {
-				// assume first reg is target, then next two reg or imm are operands.
+				// assume the first index is a register, and assume the second index is an immediate
 				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
 
 				O << "      for (auto mcop : { MI.getOperand(" << indexesForMI[1] << ") } ) {\n";
@@ -258,7 +229,8 @@ private:
 
 			// two arguments
 			} else if (operatorNames[1] == "add") {
-				// assume first reg is target, then next two reg or imm are operands.
+				// assume the first index is a register,
+				// and assume the second and third index are registers or immediates
 				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
 
 				O << "      for (auto mcop : { MI.getOperand(" << indexesForMI[1] << "), MI.getOperand(" << indexesForMI[2] << ") } ) {\n";
@@ -278,30 +250,26 @@ private:
 				O << "      goto default_label;\n";
 			}
 			O << "      customCodeAfterSET(alfbb, ctx, statement, targetReg, alfOps);\n";
+		}
+		// do something for st 
+		else if (operatorNames.size() >= 1 &&
+				operatorNames[0] == "st") { 
+			// assume the first 
+			O << "      ALFStatement *statement;\n";
+			O << "      SExpr *address;\n";
+
+			O << "      SExpr *storValue = ctx->load(32, TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg()));\n";
+			if (auto cp = leafs[1]->getComplexPatternInfo(CGDP)) {
+				Record *cpR = cp->getRecord(); 
+				if (!cpR->getValueAsString("ALFCustomMethod").empty())
+					O << "      address = " << cpR->getValueAsString("ALFCustomMethod") << "(ctx, TRI, MI);"<< "\n";
+			} else { // note: TODO
+			}
+			O << "      SExpr *stor = ctx->store(address, storValue);\n";
+			O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
 		} else {
 			O << "      goto default_label;\n";
 		}
-	}
-
-	void make_NZCV(raw_ostream &O)
-	{
-		O << "\n";
-		O << "        alfbb.addStatement(\"\", TII->getName(MI.getOpcode()), stor);\n";
-		O << "        SExpr *expr_nzcv = ctx->conc(2, 30,\n";
-		O << "          ctx->conc(1, 1, \n";
-		O << "            ctx->if_(1, \n";
-		O << "          	  ctx->s_lt(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)),\n";
-		O << "          	  ctx->dec_unsigned(1, 1),\n";
-		O << "          	  ctx->dec_unsigned(1, 0)),\n";
-		O << "            ctx->if_(1, \n";
-		O << "          	  ctx->eq(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)),\n";
-		O << "          	  ctx->dec_unsigned(1, 1),\n";
-		O << "          	  ctx->dec_unsigned(1, 0))\n";
-		O << "          ),\n";
-		O << "          ctx->dec_unsigned(30, 0)\n";
-		O << "        );\n";
-		O << "        SExpr *stor_nzcv = ctx->store(ctx->address(\"APSR_NZCV\"), expr_nzcv); \n";
-		O << "        alfbb.addStatement(label+\"NZCV\", \"setting NZCV status flags\", stor_nzcv);\n";
 	}
 
 	void outputPrintInstructionALF(raw_ostream &O)
@@ -321,43 +289,58 @@ private:
 
 		for (unsigned i = 0, e = NumberedInstructions.size(); i != e; ++i) {
 			const CodeGenInstruction *I = NumberedInstructions[i];
-			/* Record *R = I->TheDef; */
-			/* if (R->getValueAsString("Namespace") == "TargetOpcode" || */
-			/* 		R->getValueAsBit("isPseudo")) */
-			/* 	continue; */
+
 			if (!I->AsmString.empty() && I->TheDef->getName() != "PHI") {
 
-				/* Record *R, StringRef &operation, SmallVector<Init*, 3> &ops */
-				/* StringRef oper; */
-				/* vector<int> ops; */
-				/* if (findInstrPatternInfo(I, oper)) { */
 				const std::string &InstName = I->TheDef->getName().str();
 				O << "    case " << I->Namespace << "::" << InstName << ": {\n";
 
+				// collect information about the Pattern field: 
+				// operators (set, add.. ),  leafs ( $Rn, $Rm)
+				// and indexes of the leafs in the operands of the MI
 				std::vector<int> indexesForMI;
-				vector<string> operatorNames;
-				findMachineInstrIndexes_ForPattern(I, indexesForMI, operatorNames);
+				vector<TreePatternNode*> operators, leafs;
+				findMachineInstrIndexes_ForPattern(I, indexesForMI, operators, leafs);
 
+				// Print some comments first for each instr
 				const DAGInstruction &daginst = CGDP.getInstruction(I->TheDef);
 				auto treepattern = daginst.getPattern();
+				// print the full Pattern field
 				if (treepattern) {
 					O << "      // ";
 					treepattern->print(O);
 					O << "\n";
 				}
-				O << "      //indexesForMI ";
+				// print the operands of the MI
+				O << "      //MI operands: ";
+				for (unsigned i = 0, e = I->Operands.size(); i != e; ++i) {
+					O << I->Operands[i].Name << " ";
+				}
+				O << "\n";
+				// print the indexes of the $test items in the MI operands
+				O << "      //indexesForMI: ";
 				for (auto i : indexesForMI) {
 					O << to_string(i) << " ";
 				}
 			  	O << "\n";
-
-				O << "      //operatorNames ";
-				for (auto s : operatorNames) {
-					O << s << " ";
+				// print the names of the DAG operators like set, st
+				O << "      //operatorNames: ";
+				for (auto tpn : operators) {
+					O << tpn->getOperator()->getName() << " ";
+				}
+			  	O << "\n";
+				// print complex leafs if any
+				O << "      //complexleafs: ";
+				for (auto tpn : leafs) {
+					const ComplexPattern *cp = tpn->getComplexPatternInfo(CGDP);
+					if (cp) {
+						O << cp->getRecord()->getName() << " ";
+					}
 				}
 			  	O << "\n";
 
-				make_case(O, indexesForMI, operatorNames);
+				// after printing comments, generate the code for each case
+				make_case(O, indexesForMI, operators, leafs);
 
 				O << "      break;\n";
 				O << "    }\n";
@@ -382,6 +365,24 @@ private:
 
 		O << "}\n\n";
 	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	// OLD
+
 
 	void outputALFRegisterDefinitionsTEST(raw_ostream &O)
 	{

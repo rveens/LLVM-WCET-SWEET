@@ -32,6 +32,25 @@ static void customCodeAfterSET(ALFStatementGroup &alfbb,
 	alfbb.addStatement(label, "setting status flags", stor_nzcv);
 }
 
+static SExpr *t_addrmode_sp_customALF(ALFContext *ctx, const TargetRegisterInfo *TRI, const MachineInstr &MI)
+{
+	/* tSTRspi %R0<kill>, %SP, 2, pred:14, pred:%noreg; mem:ST4[%a] */
+	// make an ALFAddressExpr* using arguments 1 (SP) and 2 (imm)
+	string SP = TRI->getName(MI.getOperand(1).getReg());
+	auto I = MI.getOperand(2).getImm();
+	// compute load(SP) * I*4  * 8 
+	// load(SP) * I
+	SExpr *mul1 = ctx->u_mul(32, 32, ctx->load(32, SP), ctx->dec_unsigned(32, I));
+	SExpr *mul1_sel = ctx->select(0, 31, 64, mul1);
+	// * 4 * 8 
+	SExpr *mul2 = ctx->u_mul(32, 32, mul1_sel, ctx->dec_unsigned(32, 32));
+	SExpr *mul2_sel = ctx->select(0, 31, 64, mul2);
+
+    return ctx->list("addr")->append(32)
+		->append(ctx->fref("mem"))
+		->append(mul2_sel);
+}
+
 #include "ARMGenALFWriter.inc"
 
 

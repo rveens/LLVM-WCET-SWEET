@@ -170,6 +170,13 @@ public:
                 ->append(Op2)
                 ->append(dec_unsigned(1,Carry));
     }
+    SExpr* u_mul(unsigned BitWidthM, unsigned BitWidthN, SExpr *Op1, SExpr *Op2) {
+        return list("u_mul")
+                ->append(BitWidthM)
+                ->append(BitWidthN)
+                ->append(Op1)
+                ->append(Op2);
+    }
     SExpr* load(unsigned BitWidth, SExpr* ref) {
         return list("load")->append(BitWidth)->append(ref);
     }
@@ -228,6 +235,13 @@ public:
                 ->append(BitWidth2)
                 ->append(Op1)
                 ->append(Op2);
+    }
+    SExpr* select(unsigned BitWidthK, unsigned BitWidthM, unsigned BitWidthN, SExpr *Op1) {
+        return list("select")
+                ->append(BitWidthK)
+                ->append(BitWidthM)
+                ->append(BitWidthN)
+                ->append(Op1);
     }
 
 };

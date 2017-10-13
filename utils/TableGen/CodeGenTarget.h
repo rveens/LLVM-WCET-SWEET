@@ -197,6 +197,7 @@ class ComplexPattern {
   std::vector<Record*> RootNodes;
   unsigned Properties; // Node properties
   unsigned Complexity;
+  Record *Rec;
 public:
   ComplexPattern(Record *R);
 
@@ -208,6 +209,7 @@ public:
   }
   bool hasProperty(enum SDNP Prop) const { return Properties & (1 << Prop); }
   unsigned getComplexity() const { return Complexity; }
+  Record *getRecord() const { return Rec; };
 };
 
 } // End llvm namespace
