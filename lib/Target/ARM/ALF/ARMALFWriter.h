@@ -20,6 +20,8 @@ namespace {
 			// Table'gen'd
 			void printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label);
 			void regDefALF(ALFBuilder &b);
+		private:
+			void initFrames(ALFBuilder &b);
 	};
 	char ARMALFWriter::ID = 0;
 }

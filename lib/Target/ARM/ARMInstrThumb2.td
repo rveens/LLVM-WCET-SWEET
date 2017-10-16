@@ -772,7 +772,6 @@ multiclass T2I_bin_ii12rs<bits<3> op23_21, string opc, SDNode opnode,
      let Inst{24} = 1;
      let Inst{23-21} = op23_21;
      let Inst{15} = 0;
-     let ALFString = "test";
    }
    }
    // 12-bit imm

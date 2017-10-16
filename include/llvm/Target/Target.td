@@ -503,8 +503,8 @@ class Instruction {
   bit UseNamedOperandTable = 0;
 
 
-  /// ALF string for the SWEET tool is to be outputted
-  string ALFString = "";
+  /// Custom method for generation of ALF for the SWEET tool
+  string ALFCustomMethod = "";
 }
 
 /// PseudoInstExpansion - Expansion information for a pseudo-instruction.

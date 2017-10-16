@@ -395,6 +395,7 @@ def tADDspi : T1pIt<(outs GPRsp:$Rdn), (ins GPRsp:$Rn, t_imm0_508s4:$imm),
   bits<7> imm;
   let Inst{6-0} = imm;
   let DecoderMethod = "DecodeThumbAddSPImm";
+  let ALFCustomMethod = "tADDspi_customALF";
 }
 
 // SUB sp, sp, #<imm7>
@@ -406,6 +407,7 @@ def tSUBspi : T1pIt<(outs GPRsp:$Rdn), (ins GPRsp:$Rn, t_imm0_508s4:$imm),
   bits<7> imm;
   let Inst{6-0} = imm;
   let DecoderMethod = "DecodeThumbAddSPImm";
+  let ALFCustomMethod = "tSUBspi_customALF";
 }
 
 def : tInstAlias<"add${p} sp, $imm",
@@ -467,7 +469,7 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1, isIndirectBranch = 1 in {
   }
 }
 
-let isReturn = 1, isTerminator = 1, isBarrier = 1 in {
+let isReturn = 1, isTerminator = 1, isBarrier = 1, ALFCustomMethod="tBX_RET_customALF" in {
   def tBX_RET : tPseudoExpand<(outs), (ins pred:$p), 2, IIC_Br,
                    [(ARMretflag)], (tBX LR, pred:$p)>, Sched<[WriteBr]>;
 
@@ -1092,7 +1094,6 @@ def tMOVi8 : T1sI<(outs tGPR:$Rd), (ins imm0_255:$imm8), IIC_iMOVi,
   bits<8> imm8;
   let Inst{10-8} = Rd;
   let Inst{7-0}  = imm8;
-  let ALFString = "tmovTEST";
 }
 // Because we have an explicit tMOVSr below, we need an alias to handle
 // the immediate "movs" form here. Blech.

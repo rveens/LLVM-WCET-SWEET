@@ -38,21 +38,94 @@ static SExpr *t_addrmode_sp_customALF(ALFContext *ctx, const TargetRegisterInfo 
 	// make an ALFAddressExpr* using arguments 1 (SP) and 2 (imm)
 	string SP = TRI->getName(MI.getOperand(1).getReg());
 	auto I = MI.getOperand(2).getImm();
-	// compute load(SP) * I*4  * 8 
-	// load(SP) * I
-	SExpr *mul1 = ctx->u_mul(32, 32, ctx->load(32, SP), ctx->dec_unsigned(32, I));
-	SExpr *mul1_sel = ctx->select(0, 31, 64, mul1);
-	// * 4 * 8 
-	SExpr *mul2 = ctx->u_mul(32, 32, mul1_sel, ctx->dec_unsigned(32, 32));
-	SExpr *mul2_sel = ctx->select(0, 31, 64, mul2);
+	// compute I*4
+	SExpr *mul1 = ctx->u_mul(32, 32, ctx->dec_unsigned(32, I), ctx->dec_unsigned(32, 4));
+	SExpr *mul1_sel = ctx->select(64, 0, 31, mul1);
 
     return ctx->list("addr")->append(32)
 		->append(ctx->fref("mem"))
-		->append(mul2_sel);
+		->append(mul1_sel);
+}
+
+static void tADDspi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* %SP<def,tied1> = tSUBspi %SP<tied0>, 3, pred:14, pred:%noreg; flags: FrameSetup */
+	// store in SP the SP value subtracted with an operand 
+	string SP = TRI->getName(MI.getOperand(1).getReg());
+	auto I = MI.getOperand(2).getImm();
+
+	// compute I*4
+	SExpr *mul1 = ctx->u_mul(32, 32, ctx->dec_unsigned(32, I), ctx->dec_unsigned(32, 4));
+	SExpr *mul1_sel = ctx->select(64, 0, 31, mul1);
+
+	// subtract SP by mul2_sel
+	SExpr *add = ctx->add(32, ctx->load(32, SP), mul1_sel);
+
+	SExpr *stor = ctx->store(ctx->address(SP), add);
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
+
+}
+
+static void tSUBspi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* %SP<def,tied1> = tSUBspi %SP<tied0>, 3, pred:14, pred:%noreg; flags: FrameSetup */
+	// store in SP the SP value subtracted with an operand 
+	string SP = TRI->getName(MI.getOperand(1).getReg());
+	auto I = MI.getOperand(2).getImm();
+
+	// compute I*4 * 8 (or: I*32)
+	SExpr *mul1 = ctx->u_mul(32, 32, ctx->dec_unsigned(32, I), ctx->dec_unsigned(32, 4));
+	SExpr *mul1_sel = ctx->select(64, 0, 31, mul1);
+
+	// subtract SP by mul1_sel
+	SExpr *subtr = ctx->sub(32, ctx->load(32, SP), mul1_sel);
+
+	SExpr *stor = ctx->store(ctx->address(SP), subtr);
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
+}
+
+static void tBX_RET_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	SExpr *loadR0 = ctx->load(32, "R0");
+	SExpr *ret = ctx->ret(loadR0);
+
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), ret);
 }
 
 #include "ARMGenALFWriter.inc"
 
+void ARMALFWriter::initFrames(ALFBuilder &b)
+{
+	SExpr *zero = b.dec_unsigned(32, 0);
+
+	b.addInit("APSR_NZCV", 0, zero, false);
+	b.addInit("CPSR", 0, zero, false);
+	b.addInit("LR" , 0, zero, false);
+	b.addInit("PC" , 0, zero, false);
+	b.addInit("SP" , 0, zero, false);
+	b.addInit("R0" , 0, zero, false);
+	b.addInit("R1" , 0, zero, false);
+	b.addInit("R2" , 0, zero, false);
+	b.addInit("R3" , 0, zero, false);
+	b.addInit("R4" , 0, zero, false);
+	b.addInit("R5" , 0, zero, false);
+	b.addInit("R6" , 0, zero, false);
+	b.addInit("R7" , 0, zero, false);
+	b.addInit("R8" , 0, zero, false);
+	b.addInit("R9" , 0, zero, false);
+	b.addInit("R10", 0, zero, false);
+	b.addInit("R11", 0, zero, false);
+	b.addInit("R12", 0, zero, false);
+}
 
 bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 {
@@ -68,9 +141,10 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 	static ALFBuilder b(o);
 
 	b.setBitWidths(32, 32, 32);
-	b.setLittleEndian(false);
+	b.setLittleEndian(true);
 
 	regDefALF(b); // TableGen
+	initFrames(b);
 
 	auto alffunc = b.addFunction(MF.getName(), MF.getName(), "dit is een test");
 	assert(alffunc && "Error creating ALF function!");

@@ -232,7 +232,7 @@ private:
 				// assume the first index is a register, and assume the second index is an immediate
 				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
 
-				handleDefaultOperand(O, "op1", 1, leafs[1]);
+				handleDefaultOperand(O, "op1", indexesForMI[1], leafs[1]);
 
 				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), op1);\n";
 				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
@@ -243,8 +243,8 @@ private:
 				// and assume the second and third index are registers or immediates
 				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
 
-				handleDefaultOperand(O, "op1", 1, leafs[1]);
-				handleDefaultOperand(O, "op2", 2, leafs[2]);
+				handleDefaultOperand(O, "op1", indexesForMI[1], leafs[1]);
+				handleDefaultOperand(O, "op2", indexesForMI[2], leafs[2]);
 
 				O << "      SExpr *expr = ctx->add(32, op1, op2, 0);\n";
 
@@ -256,9 +256,10 @@ private:
 				// and assume the second index is registers or immediates
 				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
 
-				handleDefaultOperand(O, "op1", 1, leafs[1]);
+				handleDefaultOperand(O, "op1", indexesForMI[1], leafs[1]);
 
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), op1);\n";
+				O << "      SExpr *load = ctx->load(32, op1);\n";
+				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), load);\n";
 				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
 			} else {
 				O << "      goto default_label;\n";
@@ -275,12 +276,10 @@ private:
 
 			O << "      SExpr *storValue = ctx->load(32, TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg()));\n";
 
-			handleDefaultOperand(O, "address", 1, leafs[1]);
+			handleDefaultOperand(O, "address", indexesForMI[1], leafs[1]);
 
 			O << "      SExpr *stor = ctx->store(address, storValue);\n";
 			O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
-		} else {
-			O << "      goto default_label;\n";
 		}
 	}
 
@@ -302,7 +301,8 @@ private:
 		for (unsigned i = 0, e = NumberedInstructions.size(); i != e; ++i) {
 			const CodeGenInstruction *I = NumberedInstructions[i];
 
-			if (!I->AsmString.empty() && I->TheDef->getName() != "PHI") {
+			/* if (!I->AsmString.empty() && I->TheDef->getName() != "PHI") { */
+			if (I->TheDef->getName() != "PHI") {
 
 				const std::string &InstName = I->TheDef->getName().str();
 				O << "    case " << I->Namespace << "::" << InstName << ": {\n";
@@ -351,8 +351,18 @@ private:
 				}
 			  	O << "\n";
 
+
 				// after printing comments, generate the code for each case
-				make_case(O, indexesForMI, operators, leafs);
+
+				// call the special function if it is not empty
+				Record *R = I->TheDef; 
+				if (!R->getValueAsString("ALFCustomMethod").empty()) {
+					O << "      " << R->getValueAsString("ALFCustomMethod") << "(MI, alfbb, ctx, label);\n";
+				} else if (!operators.empty()) { // else try to do something with operators
+					make_case(O, indexesForMI, operators, leafs);
+				} else { // else jump to the end
+					O << "      goto default_label;\n";
+				}
 
 				O << "      break;\n";
 				O << "    }\n";
