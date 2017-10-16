@@ -47,6 +47,26 @@ static SExpr *t_addrmode_sp_customALF(ALFContext *ctx, const TargetRegisterInfo 
 		->append(mul1_sel);
 }
 
+static void tADDrSPi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* %R7<def> = tADDrSPi %SP, 0, pred:14, pred:%noreg; flags: FrameSetup */
+	string SP = TRI->getName(MI.getOperand(1).getReg());
+	auto I = MI.getOperand(2).getImm();
+
+	// compute I*4
+	SExpr *mul1 = ctx->u_mul(32, 32, ctx->dec_unsigned(32, I), ctx->dec_unsigned(32, 4));
+	SExpr *mul1_sel = ctx->select(64, 0, 31, mul1);
+
+	// subtract SP by mul2_sel
+	SExpr *add = ctx->add(32, ctx->load(32, SP), mul1_sel);
+
+	SExpr *stor = ctx->store(ctx->address(TRI->getName(MI.getOperand(0).getReg())), add);
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
+}
+
 static void tADDspi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
 {
 	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
@@ -66,7 +86,6 @@ static void tADDspi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, 
 
 	SExpr *stor = ctx->store(ctx->address(SP), add);
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
-
 }
 
 static void tSUBspi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)

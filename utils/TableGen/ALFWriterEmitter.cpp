@@ -213,7 +213,7 @@ private:
 		}
 	}
 	
-	void make_case(raw_ostream &O, std::vector<int> indexesForMI, vector<TreePatternNode*> operators, vector<TreePatternNode*> leafs)
+	bool make_case(raw_ostream &O, std::vector<int> indexesForMI, vector<TreePatternNode*> operators, vector<TreePatternNode*> leafs)
 	{
 		// collect names of the operators
 		vector<string> operatorNames;
@@ -266,6 +266,7 @@ private:
 			}
 			O << "      vector<SExpr*> alfOps = { op1, op2 };\n";
 			O << "      customCodeAfterSET(alfbb, ctx, statement, targetReg, alfOps);\n";
+			return true;
 		}
 		// do something for st 
 		else if (operatorNames.size() >= 1 &&
@@ -280,7 +281,9 @@ private:
 
 			O << "      SExpr *stor = ctx->store(address, storValue);\n";
 			O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+			return true;
 		}
+		return false;
 	}
 
 	void outputPrintInstructionALF(raw_ostream &O)
@@ -302,80 +305,79 @@ private:
 			const CodeGenInstruction *I = NumberedInstructions[i];
 
 			/* if (!I->AsmString.empty() && I->TheDef->getName() != "PHI") { */
-			if (I->TheDef->getName() != "PHI") {
 
-				const std::string &InstName = I->TheDef->getName().str();
-				O << "    case " << I->Namespace << "::" << InstName << ": {\n";
+			const std::string &InstName = I->TheDef->getName().str();
+			O << "    case " << I->Namespace << "::" << InstName << ": {\n";
 
-				// collect information about the Pattern field: 
-				// operators (set, add.. ),  leafs ( $Rn, $Rm)
-				// and indexes of the leafs in the operands of the MI
-				std::vector<int> indexesForMI;
-				vector<TreePatternNode*> operators, leafs;
-				findMachineInstrIndexes_ForPattern(I, indexesForMI, operators, leafs);
+			// collect information about the Pattern field: 
+			// operators (set, add.. ),  leafs ( $Rn, $Rm)
+			// and indexes of the leafs in the operands of the MI
+			std::vector<int> indexesForMI;
+			vector<TreePatternNode*> operators, leafs;
+			findMachineInstrIndexes_ForPattern(I, indexesForMI, operators, leafs);
 
-				// Print some comments first for each instr
-				const DAGInstruction &daginst = CGDP.getInstruction(I->TheDef);
-				auto treepattern = daginst.getPattern();
-				// print the full Pattern field
-				if (treepattern) {
-					O << "      // ";
-					treepattern->print(O);
-					O << "\n";
-				}
-				// print the operands of the MI
-				O << "      //MI operands: ";
-				for (unsigned i = 0, e = I->Operands.size(); i != e; ++i) {
-					O << I->Operands[i].Name << " ";
-				}
+			// Print some comments first for each instr
+			const DAGInstruction &daginst = CGDP.getInstruction(I->TheDef);
+			auto treepattern = daginst.getPattern();
+			// print the full Pattern field
+			if (treepattern) {
+				O << "      // ";
+				treepattern->print(O);
 				O << "\n";
-				// print the indexes of the $test items in the MI operands
-				O << "      //indexesForMI: ";
-				for (auto i : indexesForMI) {
-					O << to_string(i) << " ";
-				}
-			  	O << "\n";
-				// print the names of the DAG operators like set, st
-				O << "      //operatorNames: ";
-				for (auto tpn : operators) {
-					O << tpn->getOperator()->getName() << " ";
-				}
-			  	O << "\n";
-				// print complex leafs if any
-				O << "      //complexleafs: ";
-				for (auto tpn : leafs) {
-					const ComplexPattern *cp = tpn->getComplexPatternInfo(CGDP);
-					if (cp) {
-						O << cp->getRecord()->getName() << " ";
-					}
-				}
-			  	O << "\n";
-
-
-				// after printing comments, generate the code for each case
-
-				// call the special function if it is not empty
-				Record *R = I->TheDef; 
-				if (!R->getValueAsString("ALFCustomMethod").empty()) {
-					O << "      " << R->getValueAsString("ALFCustomMethod") << "(MI, alfbb, ctx, label);\n";
-				} else if (!operators.empty()) { // else try to do something with operators
-					make_case(O, indexesForMI, operators, leafs);
-				} else { // else jump to the end
-					O << "      goto default_label;\n";
-				}
-
-				O << "      break;\n";
-				O << "    }\n";
-
-				int OpIdx = 0;
-				for (auto &opInfo : I->Operands.OperandList) {
-					CGIOperandList::OperandInfo OpInfo = I->Operands[OpIdx];
-					/* O << " " << OpInfo.PrinterMethodName << "\n"; */
-					/* unsigned MIOp = OpInfo.MIOperandNo; */
-
-					OpIdx++;
+			}
+			// print the operands of the MI
+			O << "      //MI operands: ";
+			for (unsigned i = 0, e = I->Operands.size(); i != e; ++i) {
+				O << I->Operands[i].Name << " ";
+			}
+			O << "\n";
+			// print the indexes of the $test items in the MI operands
+			O << "      //indexesForMI: ";
+			for (auto i : indexesForMI) {
+				O << to_string(i) << " ";
+			}
+			O << "\n";
+			// print the names of the DAG operators like set, st
+			O << "      //operatorNames: ";
+			for (auto tpn : operators) {
+				O << tpn->getOperator()->getName() << " ";
+			}
+			O << "\n";
+			// print complex leafs if any
+			O << "      //complexleafs: ";
+			for (auto tpn : leafs) {
+				const ComplexPattern *cp = tpn->getComplexPatternInfo(CGDP);
+				if (cp) {
+					O << cp->getRecord()->getName() << " ";
 				}
 			}
+			O << "\n";
+
+
+			// after printing comments, generate the code for each case
+
+			// call the special function if it is not empty
+			Record *R = I->TheDef; 
+			if (!R->getValueAsString("ALFCustomMethod").empty()) {
+				O << "      " << R->getValueAsString("ALFCustomMethod") << "(MI, alfbb, ctx, label);\n";
+			} else if (!operators.empty() && // else try to do something with operators
+					make_case(O, indexesForMI, operators, leafs)) {
+			} else { // else jump to the end
+				O << "      goto default_label;\n";
+			}
+
+			O << "      break;\n";
+			O << "    }\n";
+
+			int OpIdx = 0;
+			for (auto &opInfo : I->Operands.OperandList) {
+				CGIOperandList::OperandInfo OpInfo = I->Operands[OpIdx];
+				/* O << " " << OpInfo.PrinterMethodName << "\n"; */
+				/* unsigned MIOp = OpInfo.MIOperandNo; */
+
+				OpIdx++;
+			}
+			/* } */
 		}
 
 		// Default case: unhandled opcode

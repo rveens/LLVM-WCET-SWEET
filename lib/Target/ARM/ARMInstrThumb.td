@@ -377,6 +377,7 @@ def tADDrSPi : T1pI<(outs tGPR:$dst), (ins GPRsp:$sp, t_imm0_1020s4:$imm),
   let Inst{10-8} = dst;
   let Inst{7-0}  = imm;
   let DecoderMethod = "DecodeThumbAddSpecialReg";
+  let ALFCustomMethod = "tADDrSPi_customALF";
 }
 
 // Thumb1 frame lowering is rather fragile, we hope to be able to use
