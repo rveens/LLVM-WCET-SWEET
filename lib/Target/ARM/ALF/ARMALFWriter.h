@@ -21,6 +21,7 @@ namespace {
 			void printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label);
 			void regDefALF(ALFBuilder &b);
 		private:
+			void extraFrames(ALFBuilder &b);
 			void initFrames(ALFBuilder &b);
 	};
 	char ARMALFWriter::ID = 0;

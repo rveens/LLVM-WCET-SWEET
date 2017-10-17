@@ -98,7 +98,7 @@ static void tSUBspi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, 
 	string SP = TRI->getName(MI.getOperand(1).getReg());
 	auto I = MI.getOperand(2).getImm();
 
-	// compute I*4 * 8 (or: I*32)
+	// compute I*4 (or: I*32)
 	SExpr *mul1 = ctx->u_mul(32, 32, ctx->dec_unsigned(32, I), ctx->dec_unsigned(32, 4));
 	SExpr *mul1_sel = ctx->select(64, 0, 31, mul1);
 
@@ -109,18 +109,90 @@ static void tSUBspi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, 
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
 }
 
-static void tBX_RET_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+static void tPUSH_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
 {
 	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
 	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
 
-	SExpr *loadR0 = ctx->load(32, "R0");
-	SExpr *ret = ctx->ret(loadR0);
+	/* push {r3} is alias for: */ 
+	/* str r3, [sp, #-4]! */
+	/* tPUSH pred:14, pred:%noreg, %R7<kill>, %LR<kill>, %SP<imp-def>, %SP<imp-use>; flags: FrameSetup */
+	// add store statements for each register starting from index 3 until size-2
 
-	alfbb.addStatement(label, TII->getName(MI.getOpcode()), ret);
+	for (unsigned i = 2, NumOps = MI.getNumOperands() - 2;
+			i != NumOps; ++i) {
+        const MachineOperand &MO = MI.getOperand(i);
+		string MO_name = TRI->getName(MO.getReg());
+
+		// do sub sp #-4
+		SExpr *SP_decr = ctx->sub(32, ctx->load(32, "SP"), ctx->dec_unsigned(32, 4));
+		SExpr *subtr = ctx->store(ctx->address("SP"), SP_decr);
+		alfbb.addStatement(label + "_" + MO_name + "_decrSP", "tPUSH: decrement SP by 4", subtr);
+		
+		// do str r3 [sp, #-4]
+		SExpr *str = ctx->store(ctx->address("mem", ctx->load(32, "SP")), ctx->load(32, MO_name));
+		alfbb.addStatement(label + "_" + MO_name, string("tPUSH: push {") + MO_name + " }", str);
+	}
+}
+
+static void tPOP_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* push {r3} is alias for: */ 
+	/* ldr r3, [sp], #4 */
+	/* tPOP_RET pred:14, pred:%noreg, %R7<def>, %PC<def>, %SP<imp-def>, %SP<imp-use>, %R0<imp-use> */
+	// add store statements for each register starting from index 3 until size-3
+
+	for (unsigned i = 2, NumOps = MI.getNumOperands() - 3;
+			i != NumOps; ++i) {
+        const MachineOperand &MO = MI.getOperand(i);
+		string MO_name = TRI->getName(MO.getReg());
+
+		// do ldr r3 [sp]    ( store in r3 the value from RMEM at address in SP )
+		SExpr *addrInSP = ctx->load(32, ctx->address("mem", ctx->load(32, "SP")));
+		SExpr *ldr = ctx->store(ctx->address(MO_name), addrInSP);
+
+		alfbb.addStatement(label + "_" + MO_name, string("tPOP: pop {") + MO_name + " }", ldr);
+
+		// do add sp #4
+		SExpr *SP_incr = ctx->add(32, ctx->load(32, "SP"), ctx->dec_unsigned(32, 4));
+		SExpr *incr = ctx->store(ctx->address("SP"), SP_incr);
+		alfbb.addStatement(label + "_" + MO_name + "_incrSP", "tPOP: increment SP by 4", incr);
+	}
+}
+
+static void tPOP_RET_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	tPOP_customALF(MI, alfbb, ctx, label);
+
+	// add return statement 
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), ctx->ret());
+}
+
+static void tBL_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* BL pred:14, pred:%noreg, <ga:@test>, <regmask %LR %D8 %D9 %D10 %D11 %D12 %D13 %D14 %D15 %Q4 %Q5 %Q6 %Q7 %R4 %R5 %R6 %R7 %R8 %R9 %R10 %R11 %S16 %S17 %S18 %S19 %S20 %S21 %S22 %S23 %S24 %S25 %S26 %S27 %S28 %S29 %S30 %S31 %D8_D10 %D9_D11 %D10_D12 %D11_D13 %D12_D14 %D13_D15 %Q4_Q5 %Q5_Q6 %Q6_Q7 %Q4_Q5_Q6_Q7 %R4_R5 %R6_R7 %R8_R9 %R10_R11 %D8_D9_D10 %D9_D10_D11 %D10_D11_D12 %D11_D12_D13 %D12_D13_D14 %D13_D14_D15 %D8_D10_D12 %D9_D11_D13 %D10_D12_D14 %D11_D13_D15 %D8_D10_D12_D14 %D9_D11_D13_D15 %D9_D10 %D11_D12 %D13_D14 %D9_D10_D11_D12 %D11_D12_D13_D14>, %LR<imp-def,dead>, %SP<imp-use>, %R0<imp-use>, %SP<imp-def>, %R0<imp-def> */
+	// find the label in the 3ith ([2]) argument.
+	string jumpLabel = MI.getOperand(2).getGlobal()->getName();
+	SExpr *call = ctx->call(ctx->labelRef(jumpLabel));
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), call);
 }
 
 #include "ARMGenALFWriter.inc"
+
+
+void ARMALFWriter::extraFrames(ALFBuilder &b)
+{
+	/* b.addFrame("", 32, InternalFrame); */
+}
 
 void ARMALFWriter::initFrames(ALFBuilder &b)
 {
@@ -159,11 +231,16 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 	static ALFOutput o(File, 8);
 	static ALFBuilder b(o);
 
-	b.setBitWidths(32, 32, 32);
-	b.setLittleEndian(true);
+	static bool init = false;
+	if (!init) {
+		b.setBitWidths(32, 32, 32);
+		b.setLittleEndian(true);
 
-	regDefALF(b); // TableGen
-	initFrames(b);
+		regDefALF(b); // TableGen
+		extraFrames(b);
+		initFrames(b);
+		init = true;
+	}
 
 	auto alffunc = b.addFunction(MF.getName(), MF.getName(), "dit is een test");
 	assert(alffunc && "Error creating ALF function!");

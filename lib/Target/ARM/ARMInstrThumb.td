@@ -470,7 +470,7 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1, isIndirectBranch = 1 in {
   }
 }
 
-let isReturn = 1, isTerminator = 1, isBarrier = 1, ALFCustomMethod="tBX_RET_customALF" in {
+let isReturn = 1, isTerminator = 1, isBarrier = 1 in {
   def tBX_RET : tPseudoExpand<(outs), (ins pred:$p), 2, IIC_Br,
                    [(ARMretflag)], (tBX LR, pred:$p)>, Sched<[WriteBr]>;
 
@@ -497,6 +497,7 @@ let isCall = 1,
     let Inst{13} = func{22};
     let Inst{11} = func{21};
     let Inst{10-0} = func{10-0};
+    let ALFCustomMethod = "tBL_customALF";
   }
 
   // ARMv5T and above, also used for Thumb2
@@ -821,6 +822,7 @@ def tPOP : T1I<(outs), (ins pred:$p, reglist:$regs, variable_ops),
   bits<16> regs;
   let Inst{8}   = regs{15};
   let Inst{7-0} = regs{7-0};
+  let ALFCustomMethod = "tPOP_customALF";
 }
 
 let mayStore = 1, Uses = [SP], Defs = [SP], hasExtraSrcRegAllocReq = 1 in
@@ -831,6 +833,7 @@ def tPUSH : T1I<(outs), (ins pred:$p, reglist:$regs, variable_ops),
   bits<16> regs;
   let Inst{8}   = regs{14};
   let Inst{7-0} = regs{7-0};
+  let ALFCustomMethod = "tPUSH_customALF";
 }
 
 //===----------------------------------------------------------------------===//
@@ -1569,7 +1572,7 @@ def tLDRpci_pic : PseudoInst<(outs GPR:$dst), (ins i32imm:$addr, pclabel:$cp),
 
 // Pseudo-instruction for merged POP and return.
 // FIXME: remove when we have a way to marking a MI with these properties.
-let isReturn = 1, isTerminator = 1, isBarrier = 1, mayLoad = 1,
+let isReturn = 1, isTerminator = 1, isBarrier = 1, mayLoad = 1, ALFCustomMethod = "tPOP_RET_customALF",
     hasExtraDefRegAllocReq = 1 in
 def tPOP_RET : tPseudoExpand<(outs), (ins pred:$p, reglist:$regs, variable_ops),
                            2, IIC_iPop_Br, [],

@@ -213,12 +213,19 @@ private:
 		}
 	}
 	
-	bool make_case(raw_ostream &O, std::vector<int> indexesForMI, vector<TreePatternNode*> operators, vector<TreePatternNode*> leafs)
+	bool make_case(raw_ostream &O, const CodeGenInstruction *I, std::vector<int> indexesForMI, vector<TreePatternNode*> operators, vector<TreePatternNode*> leafs)
 	{
 		// collect names of the operators
 		vector<string> operatorNames;
 		for (auto tpn : operators) {
 			operatorNames.push_back(tpn->getOperator()->getName());
+		}
+
+		// check for some is* flags in th CGI
+		// if isReturn is set make a return statement
+		if (I->isReturn) {
+			O << "      alfbb.addStatement(label, TII->getName(MI.getOpcode()), ctx->ret());\n";
+			return true; // stop here
 		}
 
 		// do something for set ... 
@@ -361,7 +368,7 @@ private:
 			if (!R->getValueAsString("ALFCustomMethod").empty()) {
 				O << "      " << R->getValueAsString("ALFCustomMethod") << "(MI, alfbb, ctx, label);\n";
 			} else if (!operators.empty() && // else try to do something with operators
-					make_case(O, indexesForMI, operators, leafs)) {
+					make_case(O, I, indexesForMI, operators, leafs)) {
 			} else { // else jump to the end
 				O << "      goto default_label;\n";
 			}

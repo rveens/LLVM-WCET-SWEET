@@ -19,6 +19,13 @@ ALFAddressExpr* ALFContext::address(const Twine& Name, uint64_t OffsetInBits) {
     Pool.push_back(Expr);
     return Expr;
 }
+
+ALFAddressExpr* ALFContext::address(const Twine& Name, SExpr *offset) {
+    ALFAddressExpr *Expr = new ALFAddressExpr(this, Name, offset);
+    Pool.push_back(Expr);
+    return Expr;
+}
+
 SExpr* ALFContext::identifier(const Twine& ident) {
     std::string Ident = ident.str();
     std::stringstream QuotedIdent;

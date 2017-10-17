@@ -131,6 +131,8 @@ public:
 
     ALFAddressExpr* address(const Twine& Name, uint64_t OffsetInBits = 0);
 
+    ALFAddressExpr* address(const Twine& Name, SExpr *offset);
+
     SExpr* fref(const Twine& Name) {
         return list("fref")->append(Config->getBitsFRef())
                             ->append(identifier(Twine(Name)));
@@ -244,6 +246,18 @@ public:
                 ->append(Op1);
     }
 
+    SExpr* call(SExpr *faddr, SExpr *retval) {
+        return list("call")
+                ->append(faddr)
+                ->append("result")
+                ->append(retval);
+    }
+    SExpr* call(SExpr *faddr) {
+        return list("call")
+                ->append(faddr)
+                ->append("result");
+    }
+
 };
 
 enum ALFSExprTypes { GenericSExpr = 0, ALFAddressSExpr = 1, ALFBegin = ALFAddressSExpr, ALFEnd = ALFAddressSExpr };
@@ -260,6 +274,14 @@ public:
         append(Ctx->fref(Twine(name)));
         append(Ctx->offset(offsetInBits));
     }
+    ALFAddressExpr(ALFContext *Ctx, const Twine& name, SExpr *offset) :
+        SExprList(Ctx), Name(name.str()), OffsetInBits(0) {
+        append("addr");
+        append(Ctx->getConfig()->getBitsFRef());
+        append(Ctx->fref(Twine(name)));
+        append(offset);
+    }
+
     virtual ~ALFAddressExpr() {}
 
     ALFAddressExpr *withOffset(uint64_t AdditionalOffset) {
