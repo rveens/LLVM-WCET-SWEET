@@ -8,11 +8,13 @@
 static void customCodeAfterSET(ALFStatementGroup &alfbb,
 						ALFContext *ctx,
 						ALFStatement *SETstatement,
-						string targetReg,
-						std::vector<SExpr *> &operands)
+						const MachineInstr &MI,
+						string targetReg, 
+						vector<SExpr *> operands)
 {
 	if (!SETstatement)
 		return;
+
 	string label = string(SETstatement->getLabel()) + "_NZCV";
 
 	SExpr *expr_nzcv = ctx->conc(2, 30, 
@@ -249,6 +251,8 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 		unsigned instrCounter = 0;
 		auto alfbb = alffunc->addBasicBlock(mbb.getFullName() + std::to_string(instrCounter), mbb.getFullName() + std::to_string(instrCounter));
 		for (MachineInstr &mi : mbb) {
+			if (mi.isCFIInstruction())
+				continue;
 			string labelName = mbb.getFullName() + std::to_string(instrCounter);
 			printInstructionALF(mi, *alfbb, alffunc, labelName); // TableGen
 			instrCounter++;

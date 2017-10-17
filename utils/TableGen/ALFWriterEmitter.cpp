@@ -112,31 +112,16 @@ private:
 		if (treepattern) {
 			auto tpn = treepattern->getOnlyTree();
 			if (tpn) {
-				dbgs() << InstName << ": ";
 				std::vector<string> leafNames;
 				findTreePatternLeafs(tpn, leafs);
 				for (auto tpn : leafs) {
 					leafNames.push_back(tpn->getName());
-					dbgs() << tpn->getName() << ", ";
 				}
 
-				dbgs() << "\n";
-
-				// small test beg
 				findTreePatternOperators(tpn, operators);
-				dbgs() << "operators: ";
-				for (auto tpn : operators) {
-					dbgs() << tpn->getOperator()->getName() << ", ";
-				}
-
-				dbgs() << "\n";
-				// small test end
-
 				for (unsigned i = 0, e = I->Operands.size(); i != e; ++i) {
 					string op = I->Operands[i].Name;
-					dbgs() << op << ", ";
 				}
-				dbgs() << "\n";
 
 				// loop through the full set of operands, find the index of the pattern name
 				for (int j = 0; j < leafNames.size(); j++) {
@@ -146,10 +131,6 @@ private:
 							indexesForMI.push_back(i);
 						}
 					}
-				}
-
-				for (int i = 0 ; i < indexesForMI.size(); i++) {
-					dbgs() << i << ": " << indexesForMI[i] << "\n";
 				}
 			}
 		}
@@ -234,6 +215,7 @@ private:
 			O << "      ALFStatement *statement;\n";
 			O << "      std::string targetReg;\n";
 			O << "      SExpr *op1, *op2;\n";
+
 			// one argument
 			if (operatorNames[1] == "imm") {
 				// assume the first index is a register, and assume the second index is an immediate
@@ -271,8 +253,33 @@ private:
 			} else {
 				O << "      goto default_label;\n";
 			}
-			O << "      vector<SExpr*> alfOps = { op1, op2 };\n";
-			O << "      customCodeAfterSET(alfbb, ctx, statement, targetReg, alfOps);\n";
+
+			// write some information of the operands to Text for the customCodeAfterSET method
+			//
+		/* O << "  struct OperandInfo {\n"; */
+		/* O << "    std::string RecName;\n"; */
+		/* O << "    std::string Name;\n"; */
+		/* O << "    std::string OperandType;\n"; */
+		/* O << "    std::string MIOperandNo;\n"; */
+		/* O << "  };\n"; */
+
+			/* O << "      vector<OperandInfo> opinfo;\n"; */
+
+			/* for (unsigned i = 0, e = I->Operands.size(); i != e; ++i) { */
+			/* 	auto op = I->Operands[i]; */
+			/* 	O << "      opinfo.RecName;\n"; */
+			/* 	O << "      opinfo.Name;\n"; */
+			/* 	O << "      opinfo.OperandType;\n"; */
+			/* 	O << "      opinfo.MIOperandNo;\n"; */
+			/* 	dbgs() << "name: " << op.Rec->getName().str() << "\n"; */
+			/* 	dbgs() << "symname: " << op.Name << "\n"; */
+			/* 	dbgs() << "type: " << op.OperandType << "\n"; */
+			/* 	dbgs() << "MIOperandNo: " << op.MIOperandNo << "\n"; */
+			/* } */
+			/* dbgs() << "\n"; */
+
+			O << "      vector<SExpr *> ops = { op1, op2 };\n";
+			O << "      customCodeAfterSET(alfbb, ctx, statement, MI, targetReg, ops);\n";
 			return true;
 		}
 		// do something for st 
@@ -306,12 +313,18 @@ private:
 		O << "  const unsigned opcode = MI.getOpcode();\n";
 		O << "  const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();\n";
 		O << "  const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();\n";
+		// user later in the code for custommethodafterset
+		O << "  struct OperandInfo {\n";
+		O << "    std::string RecName;\n";
+		O << "    std::string Name;\n";
+		O << "    std::string OperandType;\n";
+		O << "    unsigned MIOperandNo;\n";
+		O << "  };\n";
+
 		O << "  switch (opcode) {\n";
 
 		for (unsigned i = 0, e = NumberedInstructions.size(); i != e; ++i) {
 			const CodeGenInstruction *I = NumberedInstructions[i];
-
-			/* if (!I->AsmString.empty() && I->TheDef->getName() != "PHI") { */
 
 			const std::string &InstName = I->TheDef->getName().str();
 			O << "    case " << I->Namespace << "::" << InstName << ": {\n";
@@ -319,6 +332,7 @@ private:
 			// collect information about the Pattern field: 
 			// operators (set, add.. ),  leafs ( $Rn, $Rm)
 			// and indexes of the leafs in the operands of the MI
+
 			std::vector<int> indexesForMI;
 			vector<TreePatternNode*> operators, leafs;
 			findMachineInstrIndexes_ForPattern(I, indexesForMI, operators, leafs);
@@ -375,16 +389,6 @@ private:
 
 			O << "      break;\n";
 			O << "    }\n";
-
-			int OpIdx = 0;
-			for (auto &opInfo : I->Operands.OperandList) {
-				CGIOperandList::OperandInfo OpInfo = I->Operands[OpIdx];
-				/* O << " " << OpInfo.PrinterMethodName << "\n"; */
-				/* unsigned MIOp = OpInfo.MIOperandNo; */
-
-				OpIdx++;
-			}
-			/* } */
 		}
 
 		// Default case: unhandled opcode
