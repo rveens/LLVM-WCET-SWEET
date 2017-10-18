@@ -584,6 +584,7 @@ let isBranch = 1, isTerminator = 1 in
   let Inst{11-8} = p;
   let Inst{7-0} = target;
   let AsmMatchConverter = "cvtThumbBranches";
+  let ALFCustomMethod = "tBcc_customALF";
 }
 
 

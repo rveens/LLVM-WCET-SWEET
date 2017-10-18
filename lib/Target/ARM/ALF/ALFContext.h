@@ -257,7 +257,29 @@ public:
                 ->append(faddr)
                 ->append("result");
     }
-
+    SExpr* switch_(SExpr *condition, SExpr* &target, SExpr *def) {
+		return list("switch")
+			->append(condition)
+			->append(target)
+			->append(def);
+    }
+    SExpr* switch_(SExpr *condition, std::vector<SExpr*> &targets, SExpr *def) {
+		auto swtch = list("switch");
+		swtch->append(condition);
+		for (auto s : targets) {
+			swtch->append(s);
+		}
+		return swtch->append(def);
+    }
+    SExpr* target(SExpr *val, SExpr *label) {
+        return list("target")
+                ->append(val)
+                ->append(label);
+    }
+    SExpr* default_(SExpr *label) {
+        return list("default")
+                ->append(label);
+    }
 };
 
 enum ALFSExprTypes { GenericSExpr = 0, ALFAddressSExpr = 1, ALFBegin = ALFAddressSExpr, ALFEnd = ALFAddressSExpr };

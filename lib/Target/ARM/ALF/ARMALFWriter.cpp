@@ -5,6 +5,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/FileSystem.h"
 
+#include "../MCTargetDesc/ARMBaseInfo.h"
+
 static void customCodeAfterSET(ALFStatementGroup &alfbb,
 						ALFContext *ctx,
 						ALFStatement *SETstatement,
@@ -188,6 +190,52 @@ static void tBL_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFC
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), call);
 }
 
+static void tBcc_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* tBcc <BB#3>, pred:11, pred:%CPSR<kill> */
+	// build switch based on predicate
+	//
+	// { switch 
+	//   { ... }
+	//   { default }
+	// } 
+	// { label tBcc }
+	// { jump }
+	//
+	// fall-through-BB
+	// { label.. }
+	//
+	string jumpLabel = "BB#" + std::to_string(MI.getOperand(0).getMBB()->getNumber());
+
+	/* for (int i = 0; i < MI.getNumOperands(); i++) { */
+	/* 	auto op = MI.getOperand(i); */
+	/* 	op.dump(); */
+	/* 	if (op.isMBB()) { */
+	/* 		op.getMBB()->dump(); */
+	/* 	} */
+	/* } */
+
+	string FTlabelName = "";
+	// find the fall through basic block (bit of a hack)
+	for (auto sucI = MI.getParent()->succ_begin() ; sucI != MI.getParent()->succ_end(); sucI++)
+	{
+		string sucLabel = "BB#" + std::to_string((*sucI)->getNumber());
+		if (sucLabel != jumpLabel) {
+			FTlabelName = sucLabel;
+		}
+	}
+
+	SExpr *cond = ctx->dec_unsigned(32, 1); // TODO
+	SExpr *Branch = ctx->target(ctx->dec_unsigned(32, 0), ctx->labelRef(jumpLabel));
+	SExpr *Fallthrough = ctx->default_(ctx->labelRef(FTlabelName));
+	SExpr *swtch = ctx->switch_(cond, Branch, Fallthrough);
+
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), swtch);
+}
+
 #include "ARMGenALFWriter.inc"
 
 
@@ -249,11 +297,12 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 
 	for (MachineBasicBlock &mbb : MF) {
 		unsigned instrCounter = 0;
-		auto alfbb = alffunc->addBasicBlock(mbb.getFullName() + std::to_string(instrCounter), mbb.getFullName() + std::to_string(instrCounter));
+		string BBname = "BB#"+ std::to_string(mbb.getNumber());
+		auto alfbb = alffunc->addBasicBlock(BBname, BBname);
 		for (MachineInstr &mi : mbb) {
 			if (mi.isCFIInstruction())
 				continue;
-			string labelName = mbb.getFullName() + std::to_string(instrCounter);
+			string labelName = BBname + ":" + std::to_string(instrCounter);
 			printInstructionALF(mi, *alfbb, alffunc, labelName); // TableGen
 			instrCounter++;
 		}
