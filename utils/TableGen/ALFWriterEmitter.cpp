@@ -14,6 +14,8 @@
 using namespace llvm;
 using namespace std;
 
+#define DEBUG_TYPE "alfwriter-emitter"
+
 namespace {
 
 class ALFWriterEmitter {
@@ -38,12 +40,12 @@ public:
 
 	void run(raw_ostream &O)
 	{
-		/* outputCortexM3InstrsTEST(O); */
+		outputCortexM3InstrsTEST();
 		/* outputCortexM3AssemblerPredicatesTEST(O); */
 		/* outputCortexM3PredicatesTEST(O); */
 
 		/* outputCortexM0AssemblerPredicatesTEST(O); */
-		/* outputCortexM0InstrsTEST(O); */
+		outputCortexM0InstrsTEST();
 
 		/* outputALFRegisterDefinitionsTEST(O); */
 		/* outputALFInstrMapping(O); */
@@ -173,6 +175,9 @@ private:
 		// add frame representing the memory
 		O << "  b.addInfiniteFrame(\"mem\", InternalFrame);\n";
 
+		// add virtual frame for storing carry
+		O << "  b.addFrame(\"default_carry\", 8, InternalFrame);\n";
+
 		O << "}\n\n";
 	}
 
@@ -254,30 +259,6 @@ private:
 				O << "      goto default_label;\n";
 			}
 
-			// write some information of the operands to Text for the customCodeAfterSET method
-			//
-		/* O << "  struct OperandInfo {\n"; */
-		/* O << "    std::string RecName;\n"; */
-		/* O << "    std::string Name;\n"; */
-		/* O << "    std::string OperandType;\n"; */
-		/* O << "    std::string MIOperandNo;\n"; */
-		/* O << "  };\n"; */
-
-			/* O << "      vector<OperandInfo> opinfo;\n"; */
-
-			/* for (unsigned i = 0, e = I->Operands.size(); i != e; ++i) { */
-			/* 	auto op = I->Operands[i]; */
-			/* 	O << "      opinfo.RecName;\n"; */
-			/* 	O << "      opinfo.Name;\n"; */
-			/* 	O << "      opinfo.OperandType;\n"; */
-			/* 	O << "      opinfo.MIOperandNo;\n"; */
-			/* 	dbgs() << "name: " << op.Rec->getName().str() << "\n"; */
-			/* 	dbgs() << "symname: " << op.Name << "\n"; */
-			/* 	dbgs() << "type: " << op.OperandType << "\n"; */
-			/* 	dbgs() << "MIOperandNo: " << op.MIOperandNo << "\n"; */
-			/* } */
-			/* dbgs() << "\n"; */
-
 			O << "      vector<SExpr *> ops = { op1, op2 };\n";
 			O << "      customCodeAfterSET(alfbb, ctx, statement, MI, targetReg, ops);\n";
 			return true;
@@ -295,6 +276,16 @@ private:
 
 			O << "      SExpr *stor = ctx->store(address, storValue);\n";
 			O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+			return true;
+		}
+		// do something for br 
+		else if (operatorNames.size() >= 1 &&
+				operatorNames[0] == "br") { 
+			O << "      ALFStatement *statement;\n";
+			// br has one operand, a target BB
+			O << "      string jumpLabel = \"BB#\" + std::to_string(MI.getOperand(" << indexesForMI[0] << ").getMBB()->getNumber());\n";
+			O << "      SExpr *jump = ctx->jump(jumpLabel);\n";
+			O << "      alfbb.addStatement(label, TII->getName(MI.getOpcode()), jump);\n";
 			return true;
 		}
 		return false;
@@ -462,8 +453,9 @@ private:
 		}
 	}
 
-	void outputCortexM3InstrsTEST(raw_ostream &O)
+	void outputCortexM3InstrsTEST()
 	{
+		DEBUG(errs() << "Printing CortexM3 Instructions:\n");
 		CodeGenTarget Target(Records);
 		std::vector<Record*> Insts = Records.getAllDerivedDefinitions("Instruction");
 
@@ -548,7 +540,7 @@ private:
 			}
 
 			if (allFound)
-				O << InstName << "\n";
+				DEBUG(errs() << InstName << "\n");
 
 			/* O << "case " << InstName << ": {\n"; */
 
@@ -659,8 +651,10 @@ private:
 		}
 	}
 
-	void outputCortexM0InstrsTEST(raw_ostream &O)
+	void outputCortexM0InstrsTEST()
 	{
+		DEBUG(errs() << "Printing CortexM0 Instructions:\n");
+
 		CodeGenTarget Target(Records);
 		std::vector<Record*> Insts = Records.getAllDerivedDefinitions("Instruction");
 
@@ -739,7 +733,7 @@ private:
 			}
 
 			if (allFound)
-				O << InstName << "\n";
+				DEBUG(errs() << InstName << "\n");
 
 			/* O << "case " << InstName << ": {\n"; */
 

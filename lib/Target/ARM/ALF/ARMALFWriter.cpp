@@ -210,14 +210,6 @@ static void tBcc_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALF
 	//
 	string jumpLabel = "BB#" + std::to_string(MI.getOperand(0).getMBB()->getNumber());
 
-	/* for (int i = 0; i < MI.getNumOperands(); i++) { */
-	/* 	auto op = MI.getOperand(i); */
-	/* 	op.dump(); */
-	/* 	if (op.isMBB()) { */
-	/* 		op.getMBB()->dump(); */
-	/* 	} */
-	/* } */
-
 	string FTlabelName = "";
 	// find the fall through basic block (bit of a hack)
 	for (auto sucI = MI.getParent()->succ_begin() ; sucI != MI.getParent()->succ_end(); sucI++)
