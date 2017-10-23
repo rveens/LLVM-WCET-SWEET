@@ -158,6 +158,13 @@ public:
                 ->append("leaving")
                 ->append(Leaving);
     }
+    SExpr* l_shift(unsigned BitWidth1, unsigned BitWidth2, SExpr *Op1, SExpr *Op2) {
+        return list("l_shift")
+                ->append(BitWidth1)
+                ->append(BitWidth2)
+                ->append(Op1)
+                ->append(Op2);
+    }
     SExpr* add(unsigned BitWidth, SExpr *Op1, SExpr *Op2, uint8_t Carry = 0) {
         return list("add")
                 ->append(BitWidth)
