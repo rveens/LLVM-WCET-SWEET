@@ -269,6 +269,12 @@ public:
                 ->append(Op1)
                 ->append(Op2);
     }
+    SExpr* xor_(unsigned BitWidth, SExpr *Op1, SExpr *Op2) {
+        return list("xor")
+                ->append(BitWidth)
+                ->append(Op1)
+                ->append(Op2);
+    }
     SExpr* s_lt(unsigned BitWidth, SExpr *Op1, SExpr *Op2) {
         return list("s_lt")
                 ->append(BitWidth)

@@ -163,6 +163,23 @@ public:
 				O << "      SExpr *lsl = ctx->l_shift(32, 32, op1, op2);\n";
 				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), lsl);\n";
 				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+			} else if (operatorNames[1] == "xor") {
+				// assume the first index is a target register,
+				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
+
+				// and assume the second index is registers or immediates
+				handleDefaultOperand(O, "op1", indexesForMI[1], leafs[1]);
+
+				// if there is no 3th argument we asssume this is (set not .. ), or ( set xor .. -1 )
+				if (indexesForMI.size() == 2) {
+					O << "      op2 = ctx->dec_signed(32, -1);\n";
+				} else {
+					handleDefaultOperand(O, "op2", indexesForMI[2], leafs[2]);
+				}
+
+				O << "      SExpr *xor_ = ctx->xor_(32, op1, op2);\n";
+				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), xor_);\n";
+				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
 			} else {
 				O << "      goto default_label;\n";
 			}
@@ -184,6 +201,8 @@ public:
 			} else if (operatorNames[1] == "ld") {
 				return true;
 			} else if (operatorNames[1] == "shl") {
+				return true;
+			} else if (operatorNames[1] == "xor") {
 				return true;
 			} 
 		}
