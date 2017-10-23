@@ -313,6 +313,12 @@ class DwarfRegAlias<Register reg> {
       Register DwarfAlias = reg;
 }
 
+// 
+class ALFConditionFlag<Register reg, int bitposition> {
+      Register Reg = reg;
+      int Bitposition = bitposition;
+}
+
 //===----------------------------------------------------------------------===//
 // Pull in the common support for scheduling
 //
@@ -1193,6 +1199,24 @@ class AsmWriter {
 }
 def DefaultAsmWriter : AsmWriter;
 
+//===----------------------------------------------------------------------===//
+// ALFWriter - This class can be implemented by targets that want to implement
+// support for writing .alf files.
+// 
+// This is for using the SWEET tool for Worst-Case-Execution-Time analysis (WCET).
+// E.g. determine a max possible cost of cycles of a piece of code without running it.
+//
+class ALFWriter {
+  // ALFWriterClassName - This specifies the suffix to use for the alfwriter
+  // class.  Generated ALFWriter classes are always prefixed with the target
+  // name.
+  string ALFWriterClassName = "ALFWriter";
+  ALFConditionFlag Nflag;
+  ALFConditionFlag Zflag;
+  ALFConditionFlag Cflag;
+  ALFConditionFlag Vflag;
+}
+
 
 //===----------------------------------------------------------------------===//
 // Target - This class contains the "global" target information
@@ -1210,6 +1234,9 @@ class Target {
 
   // AssemblyWriters - The AsmWriter instances available for this target.
   list<AsmWriter> AssemblyWriters = [DefaultAsmWriter];
+
+  // ALFWriter - The ALFWriter instances available for this target.
+  list<ALFWriter> ALFWriters = [];
 }
 
 //===----------------------------------------------------------------------===//

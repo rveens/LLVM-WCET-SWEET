@@ -110,6 +110,10 @@ public:
   ///
   Record *getAsmWriter() const;
 
+  /// getALFWriter - Return the ALFWriter definition for this target.
+  ///
+  Record *getALFWriter() const;
+
   /// getRegBank - Return the register bank description.
   CodeGenRegBank &getRegBank() const;
 

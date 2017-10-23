@@ -218,6 +218,15 @@ Record *CodeGenTarget::getAsmWriter() const {
   return LI[AsmWriterNum];
 }
 
+/// getALFWriter - Return the AssemblyWriter definition for this target.
+///
+Record *CodeGenTarget::getALFWriter() const {
+  std::vector<Record*> LI = TargetRec->getValueAsListOfDefs("ALFWriters");
+  if (LI.empty())
+    PrintFatalError("Target does not have an ALFWriter !");
+  return LI[0];
+}
+
 CodeGenRegBank &CodeGenTarget::getRegBank() const {
   if (!RegBank)
     RegBank = llvm::make_unique<CodeGenRegBank>(Records);

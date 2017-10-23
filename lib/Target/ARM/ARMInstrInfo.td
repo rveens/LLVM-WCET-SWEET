@@ -136,7 +136,9 @@ def ARMBcci64        : SDNode<"ARMISD::BCC_i64", SDT_ARMBCC_i64,
                               [SDNPHasChain]>;
 
 def ARMcmp           : SDNode<"ARMISD::CMP", SDT_ARMCmp,
-                              [SDNPOutGlue]>;
+                              [SDNPOutGlue], "SDNode"> {
+     let ALFCustomMethod = "ARMcmp_customALF";
+}
 
 def ARMcmn           : SDNode<"ARMISD::CMN", SDT_ARMCmp,
                               [SDNPOutGlue]>;

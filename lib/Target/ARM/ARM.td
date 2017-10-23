@@ -865,9 +865,17 @@ def ARMAsmParserVariant : AsmParserVariant {
   string BreakCharacters = ".";
 }
 
+def ARMALFWriter : ALFWriter {
+   let Nflag = ALFConditionFlag<CPSR, 31>;
+   let Zflag = ALFConditionFlag<CPSR, 30>;
+   let Cflag = ALFConditionFlag<CPSR, 29>;
+   let Vflag = ALFConditionFlag<CPSR, 28>;
+}
+
 def ARM : Target {
   // Pull in Instruction Info:
   let InstructionSet = ARMInstrInfo;
   let AssemblyWriters = [ARMAsmWriter];
   let AssemblyParserVariants = [ARMAsmParserVariant];
+  let ALFWriters = [ARMALFWriter];
 }

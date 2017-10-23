@@ -317,6 +317,7 @@ class SDNode<string opcode, SDTypeProfile typeprof,
   string SDClass = sdclass;
   let Properties = props;
   SDTypeProfile TypeProfile = typeprof;
+  string ALFCustomMethod = "";
 }
 
 // Special TableGen-recognized dag nodes

@@ -165,8 +165,22 @@ public:
                 ->append(Op2)
                 ->append(dec_unsigned(1,Carry));
     }
+    SExpr* c_add(unsigned BitWidth, SExpr *Op1, SExpr *Op2, uint8_t Carry = 0) {
+        return list("c_add")
+                ->append(BitWidth)
+                ->append(Op1)
+                ->append(Op2)
+                ->append(dec_unsigned(1,Carry));
+    }
     SExpr* sub(unsigned BitWidth, SExpr *Op1, SExpr *Op2, uint8_t Carry = 1) {
         return list("sub")
+                ->append(BitWidth)
+                ->append(Op1)
+                ->append(Op2)
+                ->append(dec_unsigned(1,Carry));
+    }
+    SExpr* c_sub(unsigned BitWidth, SExpr *Op1, SExpr *Op2, uint8_t Carry = 1) {
+        return list("c_sub")
                 ->append(BitWidth)
                 ->append(Op1)
                 ->append(Op2)
@@ -219,14 +233,43 @@ public:
                 ->append(IfTrueStat)
                 ->append(IfFalseStat);
     }
+    SExpr* neg(unsigned BitWidth, SExpr *Op1) {
+        return list("neg")
+                ->append(BitWidth)
+                ->append(Op1);
+    }
     SExpr* eq(unsigned BitWidth, SExpr *Op1, SExpr *Op2) {
         return list("eq")
                 ->append(BitWidth)
                 ->append(Op1)
                 ->append(Op2);
     }
+    SExpr* neq(unsigned BitWidth, SExpr *Op1, SExpr *Op2) {
+        return list("neq")
+                ->append(BitWidth)
+                ->append(Op1)
+                ->append(Op2);
+    }
+    SExpr* and_(unsigned BitWidth, SExpr *Op1, SExpr *Op2) {
+        return list("and")
+                ->append(BitWidth)
+                ->append(Op1)
+                ->append(Op2);
+    }
+    SExpr* or_(unsigned BitWidth, SExpr *Op1, SExpr *Op2) {
+        return list("or")
+                ->append(BitWidth)
+                ->append(Op1)
+                ->append(Op2);
+    }
     SExpr* s_lt(unsigned BitWidth, SExpr *Op1, SExpr *Op2) {
         return list("s_lt")
+                ->append(BitWidth)
+                ->append(Op1)
+                ->append(Op2);
+    }
+    SExpr* s_ge(unsigned BitWidth, SExpr *Op1, SExpr *Op2) {
+        return list("s_ge")
                 ->append(BitWidth)
                 ->append(Op1)
                 ->append(Op2);

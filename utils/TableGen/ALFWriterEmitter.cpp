@@ -17,7 +17,243 @@ using namespace std;
 #define DEBUG_TYPE "alfwriter-emitter"
 
 namespace {
+struct ALFConditionFlag
+{
+	Record *TheDef;
+	unsigned Bitposition;
+	Record *Reg;
+public:
+	ALFConditionFlag(Record *R) : TheDef(R)
+	{
+		if (R) {
+			Bitposition = R->getValueAsInt("Bitposition");
+			Reg = R->getValueAsDef("Reg");
+		}
+	}
+	virtual ~ALFConditionFlag() { };
 
+private:
+	/* data */
+};
+} // end anonymous namespace
+
+namespace {
+class Pattern2ALFMapping {
+// variables
+protected:
+	CodeGenDAGPatterns &CGDP;
+	const CodeGenInstruction *I;
+	std::vector<int> indexesForMI;
+	vector<TreePatternNode*> operators;
+	vector<string> operatorNames;
+	vector<TreePatternNode*> leafs;
+
+// public functions
+public:
+	Pattern2ALFMapping(CodeGenDAGPatterns &_CGDP, const CodeGenInstruction *_I,
+					std::vector<int> _indexesForMI,
+					vector<TreePatternNode*> _operators,
+					vector<TreePatternNode*> _leafs)
+					: CGDP(_CGDP), I(_I), indexesForMI(_indexesForMI), operators(_operators), leafs(_leafs)
+	{
+		// collect names of the operators
+		for (auto tpn : operators) {
+			operatorNames.push_back(tpn->getOperator()->getName());
+		}
+	}
+
+	virtual ~Pattern2ALFMapping() { };
+
+	virtual void printALFText(raw_ostream &O) = 0;
+	virtual bool canRUN() = 0;
+
+// functions
+protected:
+	void handleDefaultOperand(raw_ostream &O, string returnVariable, unsigned int MIindex, TreePatternNode *leaf)
+	{
+		// ASSUMPTIONS: mcop exists, as well as ctx, TRI
+
+		// check if ComplexPattern
+		if (auto cp = leaf->getComplexPatternInfo(CGDP)) {
+			Record *cpR = cp->getRecord(); 
+			if (!cpR->getValueAsString("ALFCustomMethod").empty())
+				O << "      " << returnVariable << " = " << cpR->getValueAsString("ALFCustomMethod") << "(MI, alfbb, ctx, label);"<< "\n";
+		} else { // else check on MI operand what to do
+			O << "      if (MI.getOperand(" << MIindex << ").isReg()) {\n";
+			O << "        " << returnVariable << " = ctx->load(32, TRI->getName(MI.getOperand(" << MIindex << ").getReg()));\n";
+			O << "      } else if (MI.getOperand(" << MIindex << ").isImm()) {\n";
+			O << "        " << returnVariable << " = ctx->dec_unsigned(32, MI.getOperand(" << MIindex << ").getImm());\n";
+			O << "      }\n";
+		}
+	}
+	
+};
+} // end anonymous namespace
+
+namespace {
+class SETPattern : public Pattern2ALFMapping {
+public:
+	SETPattern(CodeGenDAGPatterns &_CGDP, 
+					const CodeGenInstruction *_I,
+					std::vector<int> _indexesForMI,
+					vector<TreePatternNode*> _operators,
+					vector<TreePatternNode*> _leafs)
+					: Pattern2ALFMapping(_CGDP, _I, _indexesForMI, _operators, _leafs) { }
+
+	virtual ~SETPattern() { };
+
+	void printALFText(raw_ostream &O)
+	{
+		if (!canRUN())
+			return;
+
+		if (operatorNames.size() >= 2 &&
+				operatorNames[0] == "set") { 
+			O << "      ALFStatement *statement;\n";
+			O << "      std::string targetReg;\n";
+			O << "      SExpr *op1, *op2;\n";
+
+			// one argument
+			if (operatorNames[1] == "imm") {
+				// assume the first index is a register, and assume the second index is an immediate
+				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
+
+				handleDefaultOperand(O, "op1", indexesForMI[1], leafs[1]);
+
+				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), op1);\n";
+				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+
+			// two arguments
+			} else if (operatorNames[1] == "add") {
+				// assume the first index is a register,
+				// and assume the second and third index are registers or immediates
+				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
+
+				handleDefaultOperand(O, "op1", indexesForMI[1], leafs[1]);
+				handleDefaultOperand(O, "op2", indexesForMI[2], leafs[2]);
+
+				O << "      SExpr *expr = ctx->add(32, op1, op2, 0);\n";
+
+				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
+				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+
+			} else if (operatorNames[1] == "ld") {
+				// assume the first index is a target register,
+				// and assume the second index is registers or immediates
+				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
+
+				handleDefaultOperand(O, "op1", indexesForMI[1], leafs[1]);
+
+				O << "      SExpr *load = ctx->load(32, op1);\n";
+				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), load);\n";
+				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+			} else {
+				O << "      goto default_label;\n";
+			}
+
+			O << "      vector<SExpr *> ops = { op1, op2 };\n";
+			O << "      customCodeAfterSET(alfbb, ctx, statement, MI, targetReg, ops);\n";
+		}
+	}
+
+	bool canRUN()
+	{
+		if (operatorNames.size() >= 2 &&
+				operatorNames[0] == "set") { 
+
+			if (operatorNames[1] == "imm") {
+				return true;
+			} else if (operatorNames[1] == "add") {
+				return true;
+			} else if (operatorNames[1] == "ld") {
+				return true;
+			} 
+		}
+		return false;
+	}
+
+private:
+	/* data */
+};
+} // end anonymous namespace
+
+namespace {
+class STPattern : public Pattern2ALFMapping {
+public:
+	STPattern(CodeGenDAGPatterns &_CGDP, 
+					const CodeGenInstruction *_I,
+					std::vector<int> _indexesForMI,
+					vector<TreePatternNode*> _operators,
+					vector<TreePatternNode*> _leafs)
+					: Pattern2ALFMapping(_CGDP, _I, _indexesForMI, _operators, _leafs) { }
+
+	virtual ~STPattern() { };
+
+	void printALFText(raw_ostream &O)
+	{
+		if (!canRUN())
+			return;
+		// assume the first 
+		O << "      ALFStatement *statement;\n";
+		O << "      SExpr *address;\n";
+
+		O << "      SExpr *storValue = ctx->load(32, TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg()));\n";
+
+		handleDefaultOperand(O, "address", indexesForMI[1], leafs[1]);
+
+		O << "      SExpr *stor = ctx->store(address, storValue);\n";
+		O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+	}
+
+	bool canRUN()
+	{
+		return (operatorNames.size() >= 1 &&
+				operatorNames[0] == "st");
+	}
+
+private:
+	/* data */
+};
+} // end anonymous namespace
+
+namespace {
+class BRPattern : public Pattern2ALFMapping {
+public:
+	BRPattern(CodeGenDAGPatterns &_CGDP, 
+					const CodeGenInstruction *_I,
+					std::vector<int> _indexesForMI,
+					vector<TreePatternNode*> _operators,
+					vector<TreePatternNode*> _leafs)
+					: Pattern2ALFMapping(_CGDP, _I, _indexesForMI, _operators, _leafs) { }
+
+	virtual ~BRPattern() { };
+
+	void printALFText(raw_ostream &O)
+	{
+		if (!canRUN())
+			return;
+		O << "      ALFStatement *statement;\n";
+		// br has one operand, a target BB
+		//
+		O << "      auto jumpBB = MI.getOperand(0).getMBB();\n";
+	    O << "      auto jumpFunction = jumpBB->getParent();\n";
+        O << "      string jumpLabel = string(jumpFunction->getName()) + \":BB#\" + std::to_string(jumpBB->getNumber());\n";
+		O << "      SExpr *jump = ctx->jump(jumpLabel);\n";
+		O << "      alfbb.addStatement(label, TII->getName(MI.getOpcode()), jump);\n";
+	}
+
+	bool canRUN()
+	{
+		return (operatorNames.size() >= 1 &&
+				operatorNames[0] == "br");
+	}
+
+private:
+	/* data */
+};
+} // end anonymous namespace
+
+namespace {
 class ALFWriterEmitter {
 	RecordKeeper &Records;
 	CodeGenTarget Target;
@@ -140,10 +376,12 @@ private:
 
 	void outputRegDefALF(raw_ostream &O)
 	{
+		const std::string &TargetName = Target.getName();
+
 		O <<
 			"/// regDefALF - This method is automatically generated by tablegen\n"
 			"/// from the instruction set description.\n"
-			"void ARMALFWriter::regDefALF(ALFBuilder &b) {\n";
+			"void " << TargetName << "ALFWriter::regDefALF(ALFBuilder &b) {\n";
 
 		CodeGenRegBank &RegBank = Target.getRegBank();
 		RegBank.computeDerivedInfo();
@@ -175,8 +413,15 @@ private:
 		// add frame representing the memory
 		O << "  b.addInfiniteFrame(\"mem\", InternalFrame);\n";
 
-		// add virtual frame for storing carry
-		O << "  b.addFrame(\"default_carry\", 8, InternalFrame);\n";
+		// add condflag frames
+		Record *RAlfWriter = Target.getALFWriter();
+		if (RAlfWriter) {
+			Record *nFlag = RAlfWriter->getValueAsDef("Nflag");
+			if (nFlag) {
+				ALFConditionFlag cf(nFlag);
+
+			}
+		}
 
 		O << "}\n\n";
 	}
@@ -189,7 +434,7 @@ private:
 		if (auto cp = leaf->getComplexPatternInfo(CGDP)) {
 			Record *cpR = cp->getRecord(); 
 			if (!cpR->getValueAsString("ALFCustomMethod").empty())
-				O << "      " << returnVariable << " = " << cpR->getValueAsString("ALFCustomMethod") << "(ctx, TRI, MI);"<< "\n";
+				O << "      " << returnVariable << " = " << cpR->getValueAsString("ALFCustomMethod") << "(ctx, TRI, MI, label);"<< "\n";
 		} else { // else check on MI operand what to do
 			O << "      if (MI.getOperand(" << MIindex << ").isReg()) {\n";
 			O << "        " << returnVariable << " = ctx->load(32, TRI->getName(MI.getOperand(" << MIindex << ").getReg()));\n";
@@ -207,6 +452,9 @@ private:
 			operatorNames.push_back(tpn->getOperator()->getName());
 		}
 
+		// output a struct containing the condition flags that are used by this instruction
+
+
 		// check for some is* flags in th CGI
 		// if isReturn is set make a return statement
 		if (I->isReturn) {
@@ -214,92 +462,45 @@ private:
 			return true; // stop here
 		}
 
-		// do something for set ... 
-		if (operatorNames.size() >= 2 &&
-				operatorNames[0] == "set") { 
-			O << "      ALFStatement *statement;\n";
-			O << "      std::string targetReg;\n";
-			O << "      SExpr *op1, *op2;\n";
+		vector<shared_ptr<Pattern2ALFMapping>> ALFmappings =
+		{ 
+			std::make_shared<SETPattern>(CGDP, I, indexesForMI, operators, leafs),
+			std::make_shared<STPattern>(CGDP, I, indexesForMI, operators, leafs),
+			std::make_shared<BRPattern>(CGDP, I, indexesForMI, operators, leafs),
+		};
 
-			// one argument
-			if (operatorNames[1] == "imm") {
-				// assume the first index is a register, and assume the second index is an immediate
-				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
-
-				handleDefaultOperand(O, "op1", indexesForMI[1], leafs[1]);
-
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), op1);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
-
-			// two arguments
-			} else if (operatorNames[1] == "add") {
-				// assume the first index is a register,
-				// and assume the second and third index are registers or immediates
-				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
-
-				handleDefaultOperand(O, "op1", indexesForMI[1], leafs[1]);
-				handleDefaultOperand(O, "op2", indexesForMI[2], leafs[2]);
-
-				O << "      SExpr *expr = ctx->add(32, op1, op2, 0);\n";
-
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
-
-			} else if (operatorNames[1] == "ld") {
-				// assume the first index is a target register,
-				// and assume the second index is registers or immediates
-				O << "      targetReg = TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg());\n";
-
-				handleDefaultOperand(O, "op1", indexesForMI[1], leafs[1]);
-
-				O << "      SExpr *load = ctx->load(32, op1);\n";
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), load);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
-			} else {
-				O << "      goto default_label;\n";
+		for (auto alfm : ALFmappings) {
+			if (alfm->canRUN()) {
+				alfm->printALFText(O);
+				return true;
 			}
-
-			O << "      vector<SExpr *> ops = { op1, op2 };\n";
-			O << "      customCodeAfterSET(alfbb, ctx, statement, MI, targetReg, ops);\n";
-			return true;
 		}
-		// do something for st 
-		else if (operatorNames.size() >= 1 &&
-				operatorNames[0] == "st") { 
-			// assume the first 
-			O << "      ALFStatement *statement;\n";
-			O << "      SExpr *address;\n";
 
-			O << "      SExpr *storValue = ctx->load(32, TRI->getName(MI.getOperand(" << indexesForMI[0] << ").getReg()));\n";
-
-			handleDefaultOperand(O, "address", indexesForMI[1], leafs[1]);
-
-			O << "      SExpr *stor = ctx->store(address, storValue);\n";
-			O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
-			return true;
+		// hmm do we have a custom SDNode operator function ? (ALFCustomMethod)
+		for (auto tpn : operators) {
+			Record *Op = tpn->getOperator();
+			if (Op) {
+				if (Op->isSubClassOf("SDNode") && !Op->getValueAsString("ALFCustomMethod").empty()) {
+					O << "      " << Op->getValueAsString("ALFCustomMethod") << "(MI, alfbb, ctx, label);"<< "\n";
+					return true;
+				}
+			}
 		}
-		// do something for br 
-		else if (operatorNames.size() >= 1 &&
-				operatorNames[0] == "br") { 
-			O << "      ALFStatement *statement;\n";
-			// br has one operand, a target BB
-			O << "      string jumpLabel = \"BB#\" + std::to_string(MI.getOperand(" << indexesForMI[0] << ").getMBB()->getNumber());\n";
-			O << "      SExpr *jump = ctx->jump(jumpLabel);\n";
-			O << "      alfbb.addStatement(label, TII->getName(MI.getOpcode()), jump);\n";
-			return true;
-		}
+
 		return false;
 	}
 
 	void outputPrintInstructionALF(raw_ostream &O)
 	{
+		const std::string &TargetName = Target.getName();
+
 		// Get the instruction numbering.
 		NumberedInstructions = Target.getInstructionsByEnumValue();
 
 		O <<
 			"/// printInstructionALF - This method is automatically generated by tablegen\n"
 			"/// from the instruction set description.\n"
-			"void ARMALFWriter::printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label) {\n";
+			"void " << TargetName << "ALFWriter::printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label) {\n";
 
 		O << "  const unsigned opcode = MI.getOpcode();\n";
 		O << "  const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();\n";
@@ -740,7 +941,6 @@ private:
 		}
 	}
 };
-
 } // end anonymous namespace
 
 

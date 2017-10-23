@@ -14,30 +14,34 @@ static void customCodeAfterSET(ALFStatementGroup &alfbb,
 						string targetReg, 
 						vector<SExpr *> operands)
 {
-	if (!SETstatement)
-		return;
+	/* if (!SETstatement) */
+	/* 	return; */
 
-	string label = string(SETstatement->getLabel()) + "_NZCV";
+	/* string label = string(SETstatement->getLabel()) + "_NZCV"; */
 
-	SExpr *expr_nzcv = ctx->conc(2, 30, 
-		ctx->conc(1, 1, 
-		  ctx->if_(1, 
-		  	  ctx->s_lt(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)),
-		  	  ctx->dec_unsigned(1, 1),
-		  	  ctx->dec_unsigned(1, 0)),
-		  ctx->if_(1, 
-		  	  ctx->eq(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)),
-		  	  ctx->dec_unsigned(1, 1),
-		  	  ctx->dec_unsigned(1, 0))
-		),
-	  ctx->dec_unsigned(30, 0)
-	);
-	SExpr *stor_nzcv = ctx->store(ctx->address("APSR_NZCV"), expr_nzcv); 
-	alfbb.addStatement(label, "setting status flags", stor_nzcv);
+	/* SExpr *expr_nzcv = ctx->conc(2, 30, */ 
+	/* 	ctx->conc(1, 1, */ 
+	/* 	  ctx->if_(1, */ 
+	/* 	  	  ctx->s_lt(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)), */
+	/* 	  	  ctx->dec_unsigned(1, 1), */
+	/* 	  	  ctx->dec_unsigned(1, 0)), */
+	/* 	  ctx->if_(1, */ 
+	/* 	  	  ctx->eq(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)), */
+	/* 	  	  ctx->dec_unsigned(1, 1), */
+	/* 	  	  ctx->dec_unsigned(1, 0)) */
+	/* 	), */
+	/*   ctx->dec_unsigned(30, 0) */
+	/* ); */
+	/* SExpr *stor_nzcv = ctx->store(ctx->address("APSR_NZCV"), expr_nzcv); */ 
+	/* alfbb.addStatement(label, "setting status flags", stor_nzcv); */
 }
 
-static SExpr *t_addrmode_sp_customALF(ALFContext *ctx, const TargetRegisterInfo *TRI, const MachineInstr &MI)
+// custom leaf nodes
+static SExpr *t_addrmode_sp_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
 {
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
 	/* tSTRspi %R0<kill>, %SP, 2, pred:14, pred:%noreg; mem:ST4[%a] */
 	// make an ALFAddressExpr* using arguments 1 (SP) and 2 (imm)
 	string SP = TRI->getName(MI.getOperand(1).getReg());
@@ -51,6 +55,57 @@ static SExpr *t_addrmode_sp_customALF(ALFContext *ctx, const TargetRegisterInfo 
 		->append(mul1_sel);
 }
 
+// custom operator nodes
+static SExpr *ARMcmp_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* tCMPi8 %R0<kill>, 56, pred:14, pred:%noreg, %CPSR<imp-def> */
+	string Rn = TRI->getName(MI.getOperand(0).getReg());
+	SExpr *arg2_sexpr;
+	auto arg2 = MI.getOperand(1);
+	if (arg2.isImm()) {
+		arg2_sexpr = ctx->dec_unsigned(32, arg2.getImm());
+	} else if (arg2.isReg()) {
+		arg2_sexpr = ctx->load(32, TRI->getName(arg2.getReg()));
+	}
+
+	SExpr *csub = ctx->c_sub(32, ctx->load(32, Rn), arg2_sexpr, 0);
+	SExpr *output = ctx->sub(32, ctx->load(32, Rn), arg2_sexpr, 0);
+
+	// overflow if pos - neg = pos
+	// overflow if neg - pos = neg
+	SExpr *arg1_pos = ctx->s_ge(32, ctx->load(32, Rn), ctx->dec_unsigned(32, 0));
+	SExpr *arg2_pos = ctx->s_ge(32, arg2_sexpr, ctx->dec_unsigned(32, 0));
+	SExpr *output_pos = ctx->s_ge(32, output, ctx->dec_unsigned(32, 0));
+	SExpr *arg1_neg = ctx->s_lt(32, ctx->load(32, Rn), ctx->dec_unsigned(32, 0));
+	SExpr *arg2_neg = ctx->s_lt(32, arg2_sexpr, ctx->dec_unsigned(32, 0));
+	SExpr *output_neg = ctx->s_lt(32, output, ctx->dec_unsigned(32, 0));
+	SExpr *V = ctx->or_(1,
+			ctx->and_(1, ctx->and_(1, arg1_pos, arg2_neg), output_pos), 
+			ctx->and_(1, ctx->and_(1, arg1_neg, arg2_pos), output_neg)
+			);
+
+	SExpr *expr_nzcv = ctx->conc(4, 28, 
+		ctx->conc(2, 2, 
+			ctx->conc(1, 1, 
+			  ctx->s_lt(32, output, ctx->dec_unsigned(32, 0)),
+			  ctx->eq(32, output, ctx->dec_unsigned(32, 0))
+			),
+			ctx->conc(1, 1, 
+				csub,
+				V
+			)
+		),
+		ctx->dec_unsigned(28, 0)
+	);
+	SExpr *stor_nzcv = ctx->store(ctx->address("CPSR"), expr_nzcv); 
+
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor_nzcv);
+}
+
+// custom instructions
 static void tADDrSPi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
 {
 	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
@@ -197,31 +252,88 @@ static void tBcc_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALF
 
 	/* tBcc <BB#3>, pred:11, pred:%CPSR<kill> */
 	// build switch based on predicate
-	//
-	// { switch 
-	//   { ... }
-	//   { default }
-	// } 
-	// { label tBcc }
-	// { jump }
-	//
-	// fall-through-BB
-	// { label.. }
-	//
-	string jumpLabel = "BB#" + std::to_string(MI.getOperand(0).getMBB()->getNumber());
+	auto jumpBB = MI.getOperand(0).getMBB();
+	string jumpLabel = string(jumpBB->getParent()->getName()) + ":BB#" + std::to_string(jumpBB->getNumber());
 
 	string FTlabelName = "";
 	// find the fall through basic block (bit of a hack)
 	for (auto sucI = MI.getParent()->succ_begin() ; sucI != MI.getParent()->succ_end(); sucI++)
 	{
-		string sucLabel = "BB#" + std::to_string((*sucI)->getNumber());
+		string sucLabel = string((*sucI)->getParent()->getName()) + ":BB#" + std::to_string((*sucI)->getNumber());
 		if (sucLabel != jumpLabel) {
 			FTlabelName = sucLabel;
 		}
 	}
 
-	SExpr *cond = ctx->dec_unsigned(32, 1); // TODO
-	SExpr *Branch = ctx->target(ctx->dec_unsigned(32, 0), ctx->labelRef(jumpLabel));
+	// make a condition based on the ARM ARMCC:CondCodes.
+	SExpr *loadN = ctx->select(32, 31, 31, ctx->load(32, "CPSR"));
+	SExpr *loadZ = ctx->select(32, 30, 30, ctx->load(32, "CPSR"));
+	SExpr *loadC = ctx->select(32, 29, 29, ctx->load(32, "CPSR"));
+	SExpr *loadV = ctx->select(32, 28, 28, ctx->load(32, "CPSR"));
+	SExpr *cond; // TODO
+	switch (MI.getOperand(1).getImm()) {
+		case (ARMCC::EQ):
+			cond = loadZ;
+			break;
+		case (ARMCC::NE):
+			cond = ctx->eq(1, loadZ, ctx->dec_unsigned(1, 0));
+			break;
+		case (ARMCC::HS):
+			cond = loadC;
+			break;
+		case (ARMCC::LO):
+			cond = ctx->eq(1, loadC, ctx->dec_unsigned(1, 0));
+			break;
+		case (ARMCC::MI):
+			cond = loadN;
+			break;
+		case (ARMCC::PL):
+			cond = ctx->eq(1, loadN, ctx->dec_unsigned(1, 0));
+			break;
+		case (ARMCC::VS):
+			cond = loadV;
+			break;
+		case (ARMCC::VC):
+			cond = ctx->eq(1, loadV, ctx->dec_unsigned(1, 0));
+			break;
+		case (ARMCC::HI):
+			cond = ctx->and_(1, 
+					ctx->eq(1, loadC, ctx->dec_unsigned(1, 1)),
+					ctx->eq(1, loadZ, ctx->dec_unsigned(1, 0))
+					);
+			break;
+		case (ARMCC::LS):
+			cond = ctx->or_(1, 
+					ctx->eq(1, loadC, ctx->dec_unsigned(1, 0)),
+					ctx->eq(1, loadZ, ctx->dec_unsigned(1, 1))
+					);
+			break;
+		case (ARMCC::GE):
+			cond = ctx->eq(1, loadN, loadV);
+			break;
+		case (ARMCC::LT):
+			cond = ctx->neq(1, loadN, loadV);
+			break;
+		case (ARMCC::GT):
+			cond = ctx->and_(1, 
+					ctx->eq(1, loadZ, ctx->dec_unsigned(1, 0)),
+					ctx->eq(1, loadN, loadV)
+					);
+			break;
+		case (ARMCC::LE):
+			cond = ctx->and_(1, 
+					ctx->eq(1, loadZ, ctx->dec_unsigned(1, 1)),
+					ctx->neq(1, loadN, loadV)
+					);
+			break;
+		case (ARMCC::AL):
+			cond = ctx->dec_unsigned(1, 1);
+			break;
+		default:
+			assert(false && "Unknown ARMCC!\n");
+				break;
+	}
+	SExpr *Branch = ctx->target(ctx->dec_unsigned(1, 1), ctx->labelRef(jumpLabel));
 	SExpr *Fallthrough = ctx->default_(ctx->labelRef(FTlabelName));
 	SExpr *swtch = ctx->switch_(cond, Branch, Fallthrough);
 
@@ -289,7 +401,7 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 
 	for (MachineBasicBlock &mbb : MF) {
 		unsigned instrCounter = 0;
-		string BBname = "BB#"+ std::to_string(mbb.getNumber());
+		string BBname = string(MF.getName()) + ":BB#" + std::to_string(mbb.getNumber());
 		auto alfbb = alffunc->addBasicBlock(BBname, BBname);
 		for (MachineInstr &mi : mbb) {
 			if (mi.isCFIInstruction())
