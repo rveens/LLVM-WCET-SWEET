@@ -76,15 +76,19 @@ protected:
 		// check if ComplexPattern
 		if (auto cp = leaf->getComplexPatternInfo(CGDP)) {
 			Record *cpR = cp->getRecord(); 
-			if (!cpR->getValueAsString("ALFCustomMethod").empty())
+			if (!cpR->getValueAsString("ALFCustomMethod").empty()) {
 				O << "      " << returnVariable << " = " << cpR->getValueAsString("ALFCustomMethod") << "(MI, alfbb, ctx, label);"<< "\n";
-		} else { // else check on MI operand what to do
-			O << "      if (MI.getOperand(" << MIindex << ").isReg()) {\n";
-			O << "        " << returnVariable << " = ctx->load(32, TRI->getName(MI.getOperand(" << MIindex << ").getReg()));\n";
-			O << "      } else if (MI.getOperand(" << MIindex << ").isImm()) {\n";
-			O << "        " << returnVariable << " = ctx->dec_unsigned(32, MI.getOperand(" << MIindex << ").getImm());\n";
-			O << "      }\n";
+				return; //done!
+			}
 		}
+		// else check on MI operand what to do
+		O << "      if (MI.getOperand(" << MIindex << ").isReg()) {\n";
+		O << "        " << returnVariable << " = ctx->load(32, TRI->getName(MI.getOperand(" << MIindex << ").getReg()));\n";
+		O << "      } else if (MI.getOperand(" << MIindex << ").isImm()) {\n";
+		O << "        " << returnVariable << " = ctx->dec_unsigned(32, MI.getOperand(" << MIindex << ").getImm());\n";
+		O << "      } else {\n";
+		O << "        " << returnVariable << " = ctx->undefined(32);\n";
+		O << "      }\n";
 	}
 	
 };
@@ -426,24 +430,6 @@ private:
 		O << "}\n\n";
 	}
 
-	void handleDefaultOperand(raw_ostream &O, string returnVariable, unsigned int MIindex, TreePatternNode *leaf)
-	{
-		// ASSUMPTIONS: mcop exists, as well as ctx, TRI
-
-		// check if ComplexPattern
-		if (auto cp = leaf->getComplexPatternInfo(CGDP)) {
-			Record *cpR = cp->getRecord(); 
-			if (!cpR->getValueAsString("ALFCustomMethod").empty())
-				O << "      " << returnVariable << " = " << cpR->getValueAsString("ALFCustomMethod") << "(ctx, TRI, MI, label);"<< "\n";
-		} else { // else check on MI operand what to do
-			O << "      if (MI.getOperand(" << MIindex << ").isReg()) {\n";
-			O << "        " << returnVariable << " = ctx->load(32, TRI->getName(MI.getOperand(" << MIindex << ").getReg()));\n";
-			O << "      } else if (MI.getOperand(" << MIindex << ").isImm()) {\n";
-			O << "        " << returnVariable << " = ctx->dec_unsigned(32, MI.getOperand(" << MIindex << ").getImm());\n";
-			O << "      }\n";
-		}
-	}
-	
 	bool make_case(raw_ostream &O, const CodeGenInstruction *I, std::vector<int> indexesForMI, vector<TreePatternNode*> operators, vector<TreePatternNode*> leafs)
 	{
 		// collect names of the operators
