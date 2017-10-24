@@ -646,6 +646,7 @@ def tLDRpci : T1pIs<(outs tGPR:$Rt), (ins t_addrmode_pc:$addr), IIC_iLoad_i,
   bits<8> addr;
   let Inst{10-8} = Rt;
   let Inst{7-0}  = addr;
+  let ALFCustomMethod = "tLDRpci_customALF";
 }
 
 // SP-relative loads should be matched before standard immediate-offset loads as

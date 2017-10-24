@@ -866,6 +866,7 @@ def ARMAsmParserVariant : AsmParserVariant {
 }
 
 def ARMALFWriter : ALFWriter {
+
    let Nflag = ALFConditionFlag<CPSR, 31>;
    let Zflag = ALFConditionFlag<CPSR, 30>;
    let Cflag = ALFConditionFlag<CPSR, 29>;

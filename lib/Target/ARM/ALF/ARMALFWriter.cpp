@@ -5,6 +5,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/FileSystem.h"
 
+#include "llvm/CodeGen/MachineConstantPool.h"
+
 #include "../MCTargetDesc/ARMBaseInfo.h"
 
 static void customCodeAfterSET(ALFStatementGroup &alfbb,
@@ -338,6 +340,33 @@ static void tBcc_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALF
 	SExpr *swtch = ctx->switch_(cond, Branch, Fallthrough);
 
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), swtch);
+}
+
+static void tLDRpci_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* %R0<def> = tLDRpci <cp#0>, pred:14, pred:%noreg; mem:LD4[ConstantPool] */
+	/* unsigned CPI = MI.getOperand(1).getIndex(); */
+	/* const MachineConstantPool *MCP = MI.getParent()->getParent()->getConstantPool(); */
+	/* /1* if (CPI >= MCP->getConstants().size()) *1/ */
+	/* /1* 	CPI = AFI.getOriginalCPIdx(CPI); *1/ */
+	/* assert(CPI != -1U && "Invalid constpool index"); */
+
+	/* // Derive the actual offset. */
+	/* const MachineConstantPoolEntry &CPE = MCP->getConstants()[CPI]; */
+	/* assert(!CPE.isMachineConstantPoolEntry() && "Invalid constpool entry"); */
+
+	/* const Constant *constValue = cast<GlobalVariable>(CPE.Val.ConstVal)->getInitializer(); */
+	/* const ConstantInt* constInt = cast<ConstantInt>(constValue); */
+	/* int64_t constIntValue = constInt->getSExtValue(); */
+
+	SExpr *cpVal = ctx->dec_unsigned(32, 0);
+
+	SExpr *stor = ctx->store(ctx->address(TRI->getName(MI.getOperand(0).getReg())), cpVal);
+
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
 }
 
 #include "ARMGenALFWriter.inc"
