@@ -121,16 +121,16 @@ public:
 	{
 		// check if the operators have the given pattern.
 		// e.g. (set (add ) ) , compare set and add
+		if (!I)
+			return false;
 		auto I = operators.begin();
+		if (I == operators.end())
+			return false;
 		for (auto s : pattern) {
-			if (s != I->name)
+			if (I == operators.end())
+				break;
+			if (s != I++->name)
 				return false;
-			else {
-				if (I != operators.end())
-					I++;
-				else
-					break;
-			}
 		}
 		return true;
 	}
@@ -185,10 +185,11 @@ class Pattern2ALFMapping {
 // variables
 protected:
 	shared_ptr<ALFInstructionInfo> info;
+	const ALFWriter &writer;
 
 // public functions
 public:
-	Pattern2ALFMapping(shared_ptr<ALFInstructionInfo> _info) : info(_info)
+	Pattern2ALFMapping(shared_ptr<ALFInstructionInfo> _info, const ALFWriter &_writer) : info(_info), writer(_writer)
 	{
 	}
 
@@ -227,7 +228,7 @@ protected:
 namespace {
 class SETPattern : public Pattern2ALFMapping {
 public:
-	SETPattern(shared_ptr<ALFInstructionInfo> _info) : Pattern2ALFMapping(_info)
+	SETPattern(shared_ptr<ALFInstructionInfo> _info, const ALFWriter &_writer) : Pattern2ALFMapping(_info, _writer)
 	{ }
 
 	virtual ~SETPattern() { };
@@ -313,7 +314,10 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      SExpr *expr = ctx->add(32, op1, op2, 0);\n";
+				unsigned CarrybitPos = writer.Cflag.Bitposition;
+				string CarryRegName = writer.Cflag.Reg->getName();
+				O << "      SExpr *loadC = ctx->select(32, " << CarrybitPos <<  ", " << CarrybitPos << ", ctx->load(32, \"" << CarryRegName << "\"));\n";
+				O << "      SExpr *expr = ctx->add2(32, op1, op2, loadC);\n";
 
 				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
 				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
@@ -339,6 +343,8 @@ public:
 			return true;
 		} else if (info->hasPattern({"set", "xor"})) { 
 			return true;
+		} else if (info->hasPattern({"set", "adde"})) { 
+			return true;
 		}
 		return false;
 	}
@@ -351,7 +357,7 @@ private:
 namespace {
 class STPattern : public Pattern2ALFMapping {
 public:
-	STPattern(shared_ptr<ALFInstructionInfo> _info) : Pattern2ALFMapping(_info) { }
+	STPattern(shared_ptr<ALFInstructionInfo> _info, const ALFWriter &_writer) : Pattern2ALFMapping(_info, _writer) { }
 
 	virtual ~STPattern() { }
 
@@ -386,7 +392,7 @@ private:
 namespace {
 class BRPattern : public Pattern2ALFMapping {
 public:
-	BRPattern(shared_ptr<ALFInstructionInfo> _info) : Pattern2ALFMapping(_info) { }
+	BRPattern(shared_ptr<ALFInstructionInfo> _info, const ALFWriter &_writer) : Pattern2ALFMapping(_info, _writer) { }
 
 	virtual ~BRPattern() { }
 
@@ -422,12 +428,12 @@ class ALFWriterEmitter {
 	CodeGenTarget Target;
 	vector<const CodeGenInstruction *> NumberedInstructions;
 	CodeGenDAGPatterns CGDP;
+	ALFWriter alfwriter;
 
 
 public:
-	ALFWriterEmitter(RecordKeeper &R) : Records(R), Target(R), CGDP(Records)
+	ALFWriterEmitter(RecordKeeper &R) : Records(R), Target(R), CGDP(Records), alfwriter(ALFWriter(Target.getALFWriter()))
 	{
-		ALFWriter alfwriter = ALFWriter(Target.getALFWriter());
 	}
 
 	void run(raw_ostream &O)
@@ -587,9 +593,9 @@ private:
 
 		vector<shared_ptr<Pattern2ALFMapping>> ALFmappings =
 		{ 
-			std::make_shared<SETPattern>(info),
-			std::make_shared<STPattern>(info),
-			std::make_shared<BRPattern>(info),
+			std::make_shared<SETPattern>(info, alfwriter),
+			std::make_shared<STPattern>(info, alfwriter),
+			std::make_shared<BRPattern>(info, alfwriter),
 		};
 
 		for (auto alfm : ALFmappings) {
