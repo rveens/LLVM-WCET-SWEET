@@ -369,6 +369,20 @@ static void tLDRpci_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, 
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
 }
 
+static void tMOVr_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* %R3<def> = tMOVr %R4<kill>, pred:14, pred:%noreg */
+	string target = TRI->getName(MI.getOperand(0).getReg());
+	string source = TRI->getName(MI.getOperand(1).getReg());
+	SExpr *load = ctx->load(32, source);
+
+	SExpr *stor = ctx->store(ctx->address(target), load);
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
+}
+
 #include "ARMGenALFWriter.inc"
 
 

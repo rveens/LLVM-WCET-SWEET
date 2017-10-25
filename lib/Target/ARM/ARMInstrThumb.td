@@ -1119,6 +1119,7 @@ def tMOVr : Thumb1pI<(outs GPR:$Rd), (ins GPR:$Rm), AddrModeNone,
   let Inst{7}   = Rd{3};
   let Inst{6-3} = Rm;
   let Inst{2-0} = Rd{2-0};
+  let ALFCustomMethod = "tMOVr_customALF";
 }
 let Defs = [CPSR] in
 def tMOVSr      : T1I<(outs tGPR:$Rd), (ins tGPR:$Rm), IIC_iMOVr,

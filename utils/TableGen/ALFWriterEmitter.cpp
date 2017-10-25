@@ -322,6 +322,19 @@ public:
 				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
 				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
 
+			} else if (info->hasPattern({"set", "or"})) {
+				// assume the first index is a register,
+				// and assume the second and third index are registers or immediates
+				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
+
+				handleDefaultOperand(O, "op1", info->leafs[1]);
+				handleDefaultOperand(O, "op2", info->leafs[2]);
+
+				O << "      SExpr *expr = ctx->or_(32, op1, op2);\n";
+
+				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
+				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+
 			} else {
 				O << "      goto default_label;\n";
 			}
@@ -344,6 +357,8 @@ public:
 		} else if (info->hasPattern({"set", "xor"})) { 
 			return true;
 		} else if (info->hasPattern({"set", "adde"})) { 
+			return true;
+		} else if (info->hasPattern({"set", "or"})) { 
 			return true;
 		}
 		return false;
