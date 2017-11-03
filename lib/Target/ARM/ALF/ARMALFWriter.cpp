@@ -134,16 +134,15 @@ static void tADDspi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, 
 	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
 
 	/* %SP<def,tied1> = tSUBspi %SP<tied0>, 3, pred:14, pred:%noreg; flags: FrameSetup */
-	// store in SP the SP value subtracted with an operand 
+	// store in SP the SP value added with an operand 
 	string SP = TRI->getName(MI.getOperand(1).getReg());
 	auto I = MI.getOperand(2).getImm();
 
 	// compute I*4
-	SExpr *mul1 = ctx->u_mul(32, 32, ctx->dec_unsigned(32, I), ctx->dec_unsigned(32, 4));
-	SExpr *mul1_sel = ctx->select(64, 0, 31, mul1);
+	SExpr *offset = ctx->dec_unsigned(32, I*4);
 
 	// subtract SP by mul2_sel
-	SExpr *add = ctx->add(32, ctx->load(32, SP), mul1_sel);
+	SExpr *add = ctx->add(32, ctx->load(32, SP), offset);
 
 	SExpr *stor = ctx->store(ctx->address(SP), add);
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
@@ -159,12 +158,11 @@ static void tSUBspi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, 
 	string SP = TRI->getName(MI.getOperand(1).getReg());
 	auto I = MI.getOperand(2).getImm();
 
-	// compute I*4 (or: I*32)
-	SExpr *mul1 = ctx->u_mul(32, 32, ctx->dec_unsigned(32, I), ctx->dec_unsigned(32, 4));
-	SExpr *mul1_sel = ctx->select(64, 0, 31, mul1);
+	// compute I*4
+	SExpr *offset = ctx->dec_unsigned(32, I*4);
 
 	// subtract SP by mul1_sel
-	SExpr *subtr = ctx->sub(32, ctx->load(32, SP), mul1_sel);
+	SExpr *subtr = ctx->sub(32, ctx->load(32, SP), offset);
 
 	SExpr *stor = ctx->store(ctx->address(SP), subtr);
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
@@ -180,8 +178,8 @@ static void tPUSH_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, AL
 	/* tPUSH pred:14, pred:%noreg, %R7<kill>, %LR<kill>, %SP<imp-def>, %SP<imp-use>; flags: FrameSetup */
 	// add store statements for each register starting from index 3 until size-2
 
-	for (unsigned i = 2, NumOps = MI.getNumOperands() - 2;
-			i != NumOps; ++i) {
+	for (unsigned i = MI.getNumOperands() - 3, NumOps = 1;
+			i != NumOps; --i) {
         const MachineOperand &MO = MI.getOperand(i);
 		string MO_name = TRI->getName(MO.getReg());
 
@@ -230,6 +228,9 @@ static void tPOP_RET_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb,
 	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
 
 	tPOP_customALF(MI, alfbb, ctx, label);
+
+	// special marker for debugging:
+	alfbb.addStatement(MI.getParent()->getParent()->getName() + string(":debugmarker"), "marker for reading values at the end", ctx->null());
 
 	// add return statement 
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), ctx->ret());
@@ -393,26 +394,24 @@ void ARMALFWriter::extraFrames(ALFBuilder &b)
 
 void ARMALFWriter::initFrames(ALFBuilder &b)
 {
-	SExpr *zero = b.dec_unsigned(32, 0);
-
-	b.addInit("APSR_NZCV", 0, zero, false);
-	b.addInit("CPSR", 0, zero, false);
-	b.addInit("LR" , 0, zero, false);
-	b.addInit("PC" , 0, zero, false);
-	b.addInit("SP" , 0, zero, false);
-	b.addInit("R0" , 0, zero, false);
-	b.addInit("R1" , 0, zero, false);
-	b.addInit("R2" , 0, zero, false);
-	b.addInit("R3" , 0, zero, false);
-	b.addInit("R4" , 0, zero, false);
-	b.addInit("R5" , 0, zero, false);
-	b.addInit("R6" , 0, zero, false);
-	b.addInit("R7" , 0, zero, false);
-	b.addInit("R8" , 0, zero, false);
-	b.addInit("R9" , 0, zero, false);
-	b.addInit("R10", 0, zero, false);
-	b.addInit("R11", 0, zero, false);
-	b.addInit("R12", 0, zero, false);
+	b.addInit("APSR_NZCV", 0, b.dec_unsigned(32, 0), false);
+	b.addInit("CPSR", 0, b.dec_unsigned(32, 536871283), false);
+	b.addInit("LR" , 0, b.dec_unsigned(32, 33119), false);
+	b.addInit("PC" , 0, b.dec_unsigned(32, 33232), false);
+	b.addInit("SP" , 0, b.dec_unsigned(32, 134217720), false);
+	b.addInit("R0" , 0, b.dec_unsigned(32, 1), false);
+	b.addInit("R1" , 0, b.dec_unsigned(32, 134217720), false);
+	b.addInit("R2" , 0, b.dec_unsigned(32, 134217720), false);
+	b.addInit("R3" , 0, b.dec_unsigned(32, 0), false);
+	b.addInit("R4" , 0, b.dec_unsigned(32, 1), false);
+	b.addInit("R5" , 0, b.dec_unsigned(32, 134217720), false);
+	b.addInit("R6" , 0, b.dec_unsigned(32, 0), false);
+	b.addInit("R7" , 0, b.dec_unsigned(32, 0), false);
+	b.addInit("R8" , 0, b.dec_unsigned(32, 0), false);
+	b.addInit("R9" , 0, b.dec_unsigned(32, 0), false);
+	b.addInit("R10", 0, b.dec_unsigned(32, 0), false);
+	b.addInit("R11", 0, b.dec_unsigned(32, 0), false);
+	b.addInit("R12", 0, b.dec_unsigned(32, 0), false);
 }
 
 bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
@@ -454,6 +453,7 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 			instrCounter++;
 		}
 	}
+
 	b.writeToFile(o);
 }
 

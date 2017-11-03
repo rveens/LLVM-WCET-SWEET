@@ -267,6 +267,19 @@ public:
 				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
 				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
 
+			} else if (info->hasPattern({"set", "sub"})) {
+				// assume the first index is a register,
+				// and assume the second and third index are registers or immediates
+				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
+
+				handleDefaultOperand(O, "op1", info->leafs[1]);
+				handleDefaultOperand(O, "op2", info->leafs[2]);
+
+				O << "      SExpr *expr = ctx->sub(32, op1, op2, 1);\n";
+
+				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
+				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+
 			} else if (info->hasPattern({"set", "ld"})) {
 				// assume the first index is a target register,
 				// and assume the second index is registers or immediates
@@ -334,7 +347,18 @@ public:
 
 				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
 				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+			} else if (info->hasPattern({"set", "and"})) {
+				// assume the first index is a register,
+				// and assume the second and third index are registers or immediates
+				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
 
+				handleDefaultOperand(O, "op1", info->leafs[1]);
+				handleDefaultOperand(O, "op2", info->leafs[2]);
+
+				O << "      SExpr *expr = ctx->and_(32, op1, op2);\n";
+
+				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
+				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
 			} else {
 				O << "      goto default_label;\n";
 			}
@@ -350,6 +374,8 @@ public:
 			return true;
 		} else if (info->hasPattern({"set", "add"})) { 
 			return true;
+		} else if (info->hasPattern({"set", "sub"}) && info->leafs.size() >= 3) { 
+			return true;
 		} else if (info->hasPattern({"set", "ld"})) { 
 			return true;
 		} else if (info->hasPattern({"set", "shl"})) { 
@@ -359,6 +385,8 @@ public:
 		} else if (info->hasPattern({"set", "adde"})) { 
 			return true;
 		} else if (info->hasPattern({"set", "or"})) { 
+			return true;
+		} else if (info->hasPattern({"set", "and"}) && info->leafs.size() >= 3) { 
 			return true;
 		}
 		return false;
@@ -602,6 +630,7 @@ private:
 		// check for some is* flags in th CGI
 		// if isReturn is set make a return statement
 		if (info->I->isReturn) {
+			O << "      alfbb.addStatement(MI.getParent()->getParent()->getName() + string(\":debugmarker\"), \"marker for reading values at the end\", ctx->null());\n";
 			O << "      alfbb.addStatement(label, TII->getName(MI.getOpcode()), ctx->ret());\n";
 			return true; // stop here
 		}
