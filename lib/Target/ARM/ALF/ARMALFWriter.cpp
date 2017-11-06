@@ -9,6 +9,9 @@
 
 #include "../MCTargetDesc/ARMBaseInfo.h"
 
+#define GET_ALF_HEADERS
+#include "ARMGenALFWriter.inc"
+
 static void customCodeAfterSET(ALFStatementGroup &alfbb,
 						ALFContext *ctx,
 						ALFStatement *SETstatement,
@@ -16,26 +19,43 @@ static void customCodeAfterSET(ALFStatementGroup &alfbb,
 						string targetReg, 
 						vector<SExpr *> operands)
 {
-	/* if (!SETstatement) */
-	/* 	return; */
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
 
-	/* string label = string(SETstatement->getLabel()) + "_NZCV"; */
+	/* unsigned Cond = MI.getOperand(MI.findFirstPredOperandIdx()).getImm(); */
+	/* string s = ARMCondCodeToString((ARMCC::CondCodes) Cond); */
+	/* dbgs() << "Deze instr. heeft de ARMCC: " << s << "\n"; */
 
-	/* SExpr *expr_nzcv = ctx->conc(2, 30, */ 
-	/* 	ctx->conc(1, 1, */ 
-	/* 	  ctx->if_(1, */ 
-	/* 	  	  ctx->s_lt(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)), */
-	/* 	  	  ctx->dec_unsigned(1, 1), */
-	/* 	  	  ctx->dec_unsigned(1, 0)), */
-	/* 	  ctx->if_(1, */ 
-	/* 	  	  ctx->eq(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)), */
-	/* 	  	  ctx->dec_unsigned(1, 1), */
-	/* 	  	  ctx->dec_unsigned(1, 0)) */
-	/* 	), */
-	/*   ctx->dec_unsigned(30, 0) */
-	/* ); */
-	/* SExpr *stor_nzcv = ctx->store(ctx->address("APSR_NZCV"), expr_nzcv); */ 
-	/* alfbb.addStatement(label, "setting status flags", stor_nzcv); */
+	bool setsStatusFlags = false;
+
+	for (unsigned i = 0; i < MI.getNumOperands(); i++) {
+		if (MI.getOperand(i).isReg() && 
+				TRI->getName(MI.getOperand(i).getReg()) == string("CPSR")) {
+			dbgs() << "Deze instr heeft een CPSR! (s) \n";
+			MI.print(dbgs());
+			setsStatusFlags = true;
+		}
+	}
+
+	if (setsStatusFlags) {
+		/* string label = string(SETstatement->getLabel()) + "_NZCV"; */
+
+		/* SExpr *expr_nzcv = ctx->conc(2, 30, */ 
+		/* 	ctx->conc(1, 1, */ 
+		/* 	  ctx->if_(1, */ 
+		/* 	  	  ctx->s_lt(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)), */
+		/* 	  	  ctx->dec_unsigned(1, 1), // set change */
+		/* 		  ctx->select(32, 32, 32, ctx->load(32, APSR_NZCV)) // load old bit */
+		/* 	  ctx->if_(1, */ 
+		/* 	  	  ctx->eq(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)), */
+		/* 	  	  ctx->dec_unsigned(1, 1), */
+		/* 	  	  ctx->dec_unsigned(1, 0)) */
+		/* 	), */
+		/*   ctx->dec_unsigned(30, 0) */
+		/* ); */
+		/* SExpr *stor_nzcv = ctx->store(ctx->address("APSR_NZCV"), expr_nzcv); */ 
+		/* alfbb.addStatement(label, "setting status flags", stor_nzcv); */
+	}
+
 }
 
 // custom leaf nodes
@@ -56,6 +76,40 @@ static SExpr *t_addrmode_sp_customALF(const MachineInstr &MI, ALFStatementGroup 
 		->append(ctx->fref("mem"))
 		->append(mul1_sel);
 }
+
+/* static SExpr *calc_NZCV(SExpr *op1, SExpr *op2, SExpr *output, SExpr *output_c) */
+/* { */
+/* 	SExpr *csub = ctx->c_sub(32, op1, op2, 0); */
+/* 	SExpr *output = ctx->sub(32, op1, op2, 0); */
+
+/* 	// overflow if pos - neg = pos */
+/* 	// overflow if neg - pos = neg */
+/* 	SExpr *arg1_pos = ctx->s_ge(32, op1, ctx->dec_unsigned(32, 0)); */
+/* 	SExpr *arg2_pos = ctx->s_ge(32, op2, ctx->dec_unsigned(32, 0)); */
+/* 	SExpr *output_pos = ctx->s_ge(32, output, ctx->dec_unsigned(32, 0)); */
+/* 	SExpr *arg1_neg = ctx->s_lt(32, op1, ctx->dec_unsigned(32, 0)); */
+/* 	SExpr *arg2_neg = ctx->s_lt(32, op2, ctx->dec_unsigned(32, 0)); */
+/* 	SExpr *output_neg = ctx->s_lt(32, output, ctx->dec_unsigned(32, 0)); */
+/* 	SExpr *V = ctx->or_(1, */
+/* 			ctx->and_(1, ctx->and_(1, arg1_pos, arg2_neg), output_pos), */ 
+/* 			ctx->and_(1, ctx->and_(1, arg1_neg, arg2_pos), output_neg) */
+/* 			); */
+
+/* 	SExpr *expr_nzcv = ctx->conc(4, 28, */ 
+/* 		ctx->conc(2, 2, */ 
+/* 			ctx->conc(1, 1, */ 
+/* 			  ctx->s_lt(32, output, ctx->dec_unsigned(32, 0)), */
+/* 			  ctx->eq(32, output, ctx->dec_unsigned(32, 0)) */
+/* 			), */
+/* 			ctx->conc(1, 1, */ 
+/* 				output_c, */
+/* 				V */
+/* 			) */
+/* 		), */
+/* 		ctx->dec_unsigned(28, 0) */
+/* 	); */
+/* 	ctx->store(ctx->address("CPSR"), expr_nzcv); */ 
+/* } */
 
 // custom operator nodes
 static SExpr *ARMcmp_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)

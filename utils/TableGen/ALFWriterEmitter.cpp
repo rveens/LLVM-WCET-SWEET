@@ -221,6 +221,22 @@ protected:
 		O << "        " << returnVariable << " = ctx->undefined(32);\n";
 		O << "      }\n";
 	}
+
+	void handleCONDflags(raw_ostream &O, array<bool, 4> setNZCV)
+	{
+		if (setNZCV[0]) {
+
+		}
+		if (setNZCV[1]) {
+
+		}
+		if (setNZCV[2]) {
+
+		}
+		if (setNZCV[3]) {
+
+		}
+	}
 	
 };
 } // end anonymous namespace
@@ -239,9 +255,12 @@ public:
 			return;
 
 		if (info->hasPattern({"set"})) { 
-			O << "      ALFStatement *statement;\n";
+			O << "      ALFStatement *statement = 0;\n";
 			O << "      std::string targetReg;\n";
-			O << "      SExpr *op1, *op2;\n";
+			O << "      SExpr *op1, *op2, *output, *output_carry;\n";
+			O << "      SExpr *stor = 0;\n";
+			O << "      op1 = op2 = output = output_carry = 0;\n";
+
 
 			// one argument
 			if (info->hasPattern({"set", "imm"})) {
@@ -250,8 +269,9 @@ public:
 
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), op1);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+				O << "      output = op1;\n";
+
+				O << "      stor = ctx->store(ctx->address(targetReg), op1);\n";
 
 			// two arguments
 			} else if (info->hasPattern({"set", "add"})) {
@@ -262,10 +282,10 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      SExpr *expr = ctx->add(32, op1, op2, 0);\n";
+				O << "      output = ctx->add(32, op1, op2, 0);\n";
+				O << "      output_carry = ctx->c_add(32, op1, op2, 0);\n";
 
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 
 			} else if (info->hasPattern({"set", "sub"})) {
 				// assume the first index is a register,
@@ -275,10 +295,10 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      SExpr *expr = ctx->sub(32, op1, op2, 1);\n";
+				O << "      output = ctx->sub(32, op1, op2, 1);\n";
+				O << "      output_carry = ctx->c_sub(32, op1, op2, 1);\n";
 
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 
 			} else if (info->hasPattern({"set", "ld"})) {
 				// assume the first index is a target register,
@@ -288,8 +308,7 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 
 				O << "      SExpr *load = ctx->load(32, op1);\n";
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), load);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+				O << "      stor = ctx->store(ctx->address(targetReg), load);\n";
 			} else if (info->hasPattern({"set", "shl"})) {
 				// assume the first index is a target register,
 				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
@@ -299,9 +318,8 @@ public:
 				// and assume the third index is registers or immediates
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      SExpr *lsl = ctx->l_shift(32, 32, op1, op2);\n";
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), lsl);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+				O << "      output = ctx->l_shift(32, 32, op1, op2);\n";
+				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "xor"})) {
 				// assume the first index is a target register,
 				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
@@ -316,9 +334,8 @@ public:
 					handleDefaultOperand(O, "op2", info->leafs[2]);
 				}
 
-				O << "      SExpr *xor_ = ctx->xor_(32, op1, op2);\n";
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), xor_);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+				O << "      output = ctx->xor_(32, op1, op2);\n";
+				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "adde"})) {
 				// assume the first index is a register,
 				// and assume the second and third index are registers or immediates
@@ -330,10 +347,10 @@ public:
 				unsigned CarrybitPos = writer.Cflag.Bitposition;
 				string CarryRegName = writer.Cflag.Reg->getName();
 				O << "      SExpr *loadC = ctx->select(32, " << CarrybitPos <<  ", " << CarrybitPos << ", ctx->load(32, \"" << CarryRegName << "\"));\n";
-				O << "      SExpr *expr = ctx->add2(32, op1, op2, loadC);\n";
+				O << "      output = ctx->add2(32, op1, op2, loadC);\n";
+				O << "      output_carry = ctx->c_add2(32, op1, op2, loadC);\n";
 
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 
 			} else if (info->hasPattern({"set", "or"})) {
 				// assume the first index is a register,
@@ -343,10 +360,9 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      SExpr *expr = ctx->or_(32, op1, op2);\n";
+				O << "      output = ctx->or_(32, op1, op2);\n";
 
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "and"})) {
 				// assume the first index is a register,
 				// and assume the second and third index are registers or immediates
@@ -355,13 +371,20 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      SExpr *expr = ctx->and_(32, op1, op2);\n";
+				O << "      output = ctx->and_(32, op1, op2);\n";
 
-				O << "      SExpr *stor = ctx->store(ctx->address(targetReg), expr);\n";
-				O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else {
 				O << "      goto default_label;\n";
 			}
+
+			
+			O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+			O << "      SExpr *store_condflags;\n";
+			O << "      store_condflags = calcNZCV(ctx, {false, false, false, false}, op1, op2, output, output_carry);\n";
+			O << "      if (store_condflags) {\n";
+			O << "        alfbb.addStatement(label + \"_NZCV\", TII->getName(MI.getOpcode()), store_condflags);\n";
+			O << "      }\n";
 
 			O << "      vector<SExpr *> ops = { op1, op2 };\n";
 			O << "      customCodeAfterSET(alfbb, ctx, statement, MI, targetReg, ops);\n";
@@ -491,8 +514,21 @@ public:
 		/* outputALFRegisterDefinitionsTEST(O); */
 		/* outputALFInstrMapping(O); */
 
+
+		O << "#ifdef GET_ALF_HEADERS\n";
+		O << "#undef GET_ALF_HEADERS\n";
+		O << 
+			"static SExpr *calcNZCV(ALFContext *ctx,\n"
+			"       std::array<bool, 4> NZCV, SExpr *op1, SExpr *op2,\n"
+			"       SExpr *output, SExpr *output_carry);\n";
+
+		O << "#else\n";
+
 		outputRegDefALF(O);
+		outputcalc_NZCV(O);
+
 		outputPrintInstructionALF(O);
+		O << "#endif // GET_ALF_HEADERS\n";
 	}
 
 private:
@@ -621,6 +657,62 @@ private:
 		}
 		// add frame representing the memory
 		O << "  b.addInfiniteFrame(\"mem\", InternalFrame);\n";
+
+		O << "}\n\n";
+	}
+
+	void outputcalc_NZCV(raw_ostream &O) 
+	{
+		const std::string &TargetName = Target.getName();
+
+/* const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label */
+
+		O <<
+			"/// regDefALF - This method is automatically generated by tablegen\n"
+			"/// from the instruction set description.\n"
+			"static SExpr *calcNZCV(ALFContext *ctx,\n"
+			"       std::array<bool, 4> NZCV, SExpr *op1, SExpr *op2,\n"
+			"       SExpr *output, SExpr *output_carry) {\n"
+			"  if (output == nullptr) return nullptr;"
+			"  if (ctx == nullptr) return nullptr;";
+
+		O << "  SExpr *V = ctx->dec_unsigned(1, 0);\n";
+		O << "  if (op1 && op2) {\n";
+		// overflow if pos - neg = pos
+		// overflow if neg - pos = neg
+		O << "    SExpr *arg1_pos = ctx->s_ge(32, op1, ctx->dec_unsigned(32, 0));\n";
+		O << "    SExpr *arg2_pos = ctx->s_ge(32, op2, ctx->dec_unsigned(32, 0));\n";
+		O << "    SExpr *output_pos = ctx->s_ge(32, output, ctx->dec_unsigned(32, 0));\n";
+		O << "    SExpr *arg1_neg = ctx->s_lt(32, op1, ctx->dec_unsigned(32, 0));\n";
+		O << "    SExpr *arg2_neg = ctx->s_lt(32, op2, ctx->dec_unsigned(32, 0));\n";
+		O << "    SExpr *output_neg = ctx->s_lt(32, output, ctx->dec_unsigned(32, 0));\n";
+		O << "    V = ctx->or_(1,\n";
+		O << "      ctx->and_(1, ctx->and_(1, arg1_pos, arg2_neg), output_pos),\n";
+		O << "      ctx->and_(1, ctx->and_(1, arg1_neg, arg2_pos), output_neg)\n";
+		O << "    );\n";
+		O << "  }\n";
+
+		O << "  if (output_carry == nullptr) {\n";
+		O << "    output_carry = ctx->dec_unsigned(1, 0);\n";
+		O << "  }\n";
+
+		O << "  SExpr *expr_nzcv = ctx->conc(4, 28, \n";
+		O << "    ctx->conc(2, 2, \n";
+		O << "      ctx->conc(1, 1, \n";
+		O << "        ctx->s_lt(32, output, ctx->dec_unsigned(32, 0)),\n";
+		O << "        ctx->eq(32, output, ctx->dec_unsigned(32, 0))\n";
+		O << "      ),\n";
+		O << "      ctx->conc(1, 1,\n"; 
+		O << "        output_carry,\n";
+		O << "        V\n";
+		O << "        )\n";
+		O << "      ),\n";
+		O << "      ctx->dec_unsigned(28, 0)\n";
+		O << "  );\n";
+		O << "  return ctx->store(ctx->address(\"CPSR\"), expr_nzcv);\n";
+
+		// TODO what flags, what regs
+		// 	==> tablegen
 
 		O << "}\n\n";
 	}

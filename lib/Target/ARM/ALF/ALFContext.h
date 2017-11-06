@@ -186,6 +186,13 @@ public:
                 ->append(Op2)
                 ->append(dec_unsigned(1,Carry));
     }
+    SExpr* c_add2(unsigned BitWidth, SExpr *Op1, SExpr *Op2, SExpr *carry) {
+        return list("c_add")
+                ->append(BitWidth)
+                ->append(Op1)
+                ->append(Op2)
+                ->append(carry);
+    }
     SExpr* sub(unsigned BitWidth, SExpr *Op1, SExpr *Op2, uint8_t Carry = 1) {
         return list("sub")
                 ->append(BitWidth)
