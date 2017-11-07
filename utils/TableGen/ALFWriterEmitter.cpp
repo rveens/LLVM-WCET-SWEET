@@ -221,23 +221,6 @@ protected:
 		O << "        " << returnVariable << " = ctx->undefined(32);\n";
 		O << "      }\n";
 	}
-
-	void handleCONDflags(raw_ostream &O, array<bool, 4> setNZCV)
-	{
-		if (setNZCV[0]) {
-
-		}
-		if (setNZCV[1]) {
-
-		}
-		if (setNZCV[2]) {
-
-		}
-		if (setNZCV[3]) {
-
-		}
-	}
-	
 };
 } // end anonymous namespace
 
@@ -378,16 +361,16 @@ public:
 				O << "      goto default_label;\n";
 			}
 
+			/* "bool " << TargetName << "ALFWriter::printInstructionALF(const MachineInstr &MI); */
 			
-			O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+			O << "      statement = alfbb.addStatement(label, comment, stor);\n";
 			O << "      SExpr *store_condflags;\n";
-			O << "      store_condflags = calcNZCV(ctx, {false, false, false, false}, op1, op2, output, output_carry);\n";
-			O << "      if (store_condflags) {\n";
-			O << "        alfbb.addStatement(label + \"_NZCV\", TII->getName(MI.getOpcode()), store_condflags);\n";
+			O << "      if (shouldSetCondFlags(MI)" << ") {\n";
+			O << "        store_condflags = calcNZCV(ctx, {false, false, false, false}, op1, op2, output, output_carry);\n";
+			O << "        if (store_condflags) {\n";
+			O << "          alfbb.addStatement(label + \"_NZCV\", comment, store_condflags);\n";
+			O << "        }\n";
 			O << "      }\n";
-
-			O << "      vector<SExpr *> ops = { op1, op2 };\n";
-			O << "      customCodeAfterSET(alfbb, ctx, statement, MI, targetReg, ops);\n";
 		}
 	}
 
@@ -440,7 +423,7 @@ public:
 		handleDefaultOperand(O, "address", info->leafs[1]);
 
 		O << "      SExpr *stor = ctx->store(address, storValue);\n";
-		O << "      statement = alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);\n";
+		O << "      statement = alfbb.addStatement(label, comment, stor);\n";
 	}
 
 	bool canRUN()
@@ -473,7 +456,7 @@ public:
 	    O << "      auto jumpFunction = jumpBB->getParent();\n";
         O << "      string jumpLabel = string(jumpFunction->getName()) + \":BB#\" + std::to_string(jumpBB->getNumber());\n";
 		O << "      SExpr *jump = ctx->jump(jumpLabel);\n";
-		O << "      alfbb.addStatement(label, TII->getName(MI.getOpcode()), jump);\n";
+		O << "      alfbb.addStatement(label, comment, jump);\n";
 	}
 
 	bool canRUN()
@@ -676,7 +659,10 @@ private:
 			"  if (output == nullptr) return nullptr;"
 			"  if (ctx == nullptr) return nullptr;";
 
-		O << "  SExpr *V = ctx->dec_unsigned(1, 0);\n";
+		string VflagRegName = alfwriter.Vflag.Reg->getName();
+		unsigned VflagBitPos = alfwriter.Vflag.Bitposition;
+
+		O << "  SExpr *V = ctx->select(32, " << VflagBitPos << ", " << VflagBitPos << ", ctx->load(32, \"" << VflagRegName << "\"));\n";
 		O << "  if (op1 && op2) {\n";
 		// overflow if pos - neg = pos
 		// overflow if neg - pos = neg
@@ -692,8 +678,11 @@ private:
 		O << "    );\n";
 		O << "  }\n";
 
+		string CflagRegName = alfwriter.Cflag.Reg->getName();
+		unsigned CflagBitPos = alfwriter.Cflag.Bitposition;
+
 		O << "  if (output_carry == nullptr) {\n";
-		O << "    output_carry = ctx->dec_unsigned(1, 0);\n";
+		O << "    output_carry = ctx->select(32, " << CflagBitPos << ", " << CflagBitPos << ", ctx->load(32, \"" << CflagRegName << "\"));\n";
 		O << "  }\n";
 
 		O << "  SExpr *expr_nzcv = ctx->conc(4, 28, \n";
@@ -723,7 +712,7 @@ private:
 		// if isReturn is set make a return statement
 		if (info->I->isReturn) {
 			O << "      alfbb.addStatement(MI.getParent()->getParent()->getName() + string(\":debugmarker\"), \"marker for reading values at the end\", ctx->null());\n";
-			O << "      alfbb.addStatement(label, TII->getName(MI.getOpcode()), ctx->ret());\n";
+			O << "      alfbb.addStatement(label, comment, ctx->ret());\n";
 			return true; // stop here
 		}
 
@@ -771,15 +760,12 @@ private:
 		O << "  const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();\n";
 		O << "  const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();\n";
 		// user later in the code for custommethodafterset
-		O << "  struct OperandInfo {\n";
-		O << "    std::string RecName;\n";
-		O << "    std::string Name;\n";
-		O << "    std::string OperandType;\n";
-		O << "    unsigned MIOperandNo;\n";
-		O << "  };\n";
 
-		O << "  switch (opcode) {\n";
+		O << "  string comment;\n";
+		O << "  raw_string_ostream comment_ss(comment);\n";
+		O << "  MI.print(comment_ss);\n";
 
+	  	O << "  switch (opcode) {\n";
 		for (unsigned i = 0, e = NumberedInstructions.size(); i != e; ++i) {
 			const CodeGenInstruction *I = NumberedInstructions[i];
 
@@ -813,7 +799,7 @@ private:
 		// Default case: unhandled opcode
 		O << "    default: {\n";
 		O << "      default_label:\n";
-		O << "        alfbb.addStatement(label, TII->getName(MI.getOpcode()), ctx->null());\n";
+		O << "        alfbb.addStatement(label, comment, ctx->null());\n";
 		O << "    }\n";
 		O << "  }\n";
 

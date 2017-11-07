@@ -23,6 +23,7 @@ namespace {
 		private:
 			void extraFrames(ALFBuilder &b);
 			void initFrames(ALFBuilder &b);
+			bool shouldSetCondFlags(const MachineInstr &MI);
 	};
 	char ARMALFWriter::ID = 0;
 }

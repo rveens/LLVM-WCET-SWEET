@@ -12,52 +12,6 @@
 #define GET_ALF_HEADERS
 #include "ARMGenALFWriter.inc"
 
-static void customCodeAfterSET(ALFStatementGroup &alfbb,
-						ALFContext *ctx,
-						ALFStatement *SETstatement,
-						const MachineInstr &MI,
-						string targetReg, 
-						vector<SExpr *> operands)
-{
-	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
-
-	/* unsigned Cond = MI.getOperand(MI.findFirstPredOperandIdx()).getImm(); */
-	/* string s = ARMCondCodeToString((ARMCC::CondCodes) Cond); */
-	/* dbgs() << "Deze instr. heeft de ARMCC: " << s << "\n"; */
-
-	bool setsStatusFlags = false;
-
-	for (unsigned i = 0; i < MI.getNumOperands(); i++) {
-		if (MI.getOperand(i).isReg() && 
-				TRI->getName(MI.getOperand(i).getReg()) == string("CPSR")) {
-			dbgs() << "Deze instr heeft een CPSR! (s) \n";
-			MI.print(dbgs());
-			setsStatusFlags = true;
-		}
-	}
-
-	if (setsStatusFlags) {
-		/* string label = string(SETstatement->getLabel()) + "_NZCV"; */
-
-		/* SExpr *expr_nzcv = ctx->conc(2, 30, */ 
-		/* 	ctx->conc(1, 1, */ 
-		/* 	  ctx->if_(1, */ 
-		/* 	  	  ctx->s_lt(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)), */
-		/* 	  	  ctx->dec_unsigned(1, 1), // set change */
-		/* 		  ctx->select(32, 32, 32, ctx->load(32, APSR_NZCV)) // load old bit */
-		/* 	  ctx->if_(1, */ 
-		/* 	  	  ctx->eq(32, ctx->load(32, targetReg), ctx->dec_unsigned(32, 0)), */
-		/* 	  	  ctx->dec_unsigned(1, 1), */
-		/* 	  	  ctx->dec_unsigned(1, 0)) */
-		/* 	), */
-		/*   ctx->dec_unsigned(30, 0) */
-		/* ); */
-		/* SExpr *stor_nzcv = ctx->store(ctx->address("APSR_NZCV"), expr_nzcv); */ 
-		/* alfbb.addStatement(label, "setting status flags", stor_nzcv); */
-	}
-
-}
-
 // custom leaf nodes
 static SExpr *t_addrmode_sp_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
 {
@@ -69,12 +23,12 @@ static SExpr *t_addrmode_sp_customALF(const MachineInstr &MI, ALFStatementGroup 
 	string SP = TRI->getName(MI.getOperand(1).getReg());
 	auto I = MI.getOperand(2).getImm();
 	// compute I*4
-	SExpr *mul1 = ctx->u_mul(32, 32, ctx->dec_unsigned(32, I), ctx->dec_unsigned(32, 4));
-	SExpr *mul1_sel = ctx->select(64, 0, 31, mul1);
+	SExpr *load = ctx->load(32, SP);
+	SExpr *add = ctx->add(32, load, ctx->dec_unsigned(32, I*4), 0);
 
     return ctx->list("addr")->append(32)
 		->append(ctx->fref("mem"))
-		->append(mul1_sel);
+		->append(add);
 }
 
 /* static SExpr *calc_NZCV(SExpr *op1, SExpr *op2, SExpr *output, SExpr *output_c) */
@@ -127,8 +81,8 @@ static SExpr *ARMcmp_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb,
 		arg2_sexpr = ctx->load(32, TRI->getName(arg2.getReg()));
 	}
 
-	SExpr *csub = ctx->c_sub(32, ctx->load(32, Rn), arg2_sexpr, 0);
-	SExpr *output = ctx->sub(32, ctx->load(32, Rn), arg2_sexpr, 0);
+	SExpr *csub = ctx->c_sub(32, ctx->load(32, Rn), arg2_sexpr, 1);
+	SExpr *output = ctx->sub(32, ctx->load(32, Rn), arg2_sexpr, 1);
 
 	// overflow if pos - neg = pos
 	// overflow if neg - pos = neg
@@ -172,11 +126,10 @@ static void tADDrSPi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb,
 	auto I = MI.getOperand(2).getImm();
 
 	// compute I*4
-	SExpr *mul1 = ctx->u_mul(32, 32, ctx->dec_unsigned(32, I), ctx->dec_unsigned(32, 4));
-	SExpr *mul1_sel = ctx->select(64, 0, 31, mul1);
+	SExpr *offset = ctx->dec_unsigned(32, I*4);
 
-	// subtract SP by mul2_sel
-	SExpr *add = ctx->add(32, ctx->load(32, SP), mul1_sel);
+	// incr SP by offset
+	SExpr *add = ctx->add(32, ctx->load(32, SP), offset);
 
 	SExpr *stor = ctx->store(ctx->address(TRI->getName(MI.getOperand(0).getReg())), add);
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
@@ -468,6 +421,28 @@ void ARMALFWriter::initFrames(ALFBuilder &b)
 	b.addInit("R12", 0, b.dec_unsigned(32, 0), false);
 }
 
+bool ARMALFWriter::shouldSetCondFlags(const MachineInstr &MI)
+{
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* unsigned Cond = MI.getOperand(MI.findFirstPredOperandIdx()).getImm(); */
+	/* string s = ARMCondCodeToString((ARMCC::CondCodes) Cond); */
+	/* dbgs() << "Deze instr. heeft de ARMCC: " << s << "\n"; */
+
+	bool setsStatusFlags = false;
+
+	for (unsigned i = 0; i < MI.getNumOperands(); i++) {
+		if (MI.getOperand(i).isReg() && 
+				TRI->getName(MI.getOperand(i).getReg()) == string("CPSR")) {
+			dbgs() << "Deze instr heeft een CPSR! (s) \n";
+			MI.print(dbgs());
+			setsStatusFlags = true;
+		}
+	}
+	return setsStatusFlags;
+}
+
+
 bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 {
 	std::string Filename = "arm.alf";
@@ -478,7 +453,7 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 	if (EC)
 		return false;
 
-	static ALFOutput o(File, 8);
+	static ALFOutput o(File, 1);
 	static ALFBuilder b(o);
 
 	static bool init = false;
