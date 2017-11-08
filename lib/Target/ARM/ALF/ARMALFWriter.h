@@ -24,6 +24,7 @@ namespace {
 			void extraFrames(ALFBuilder &b);
 			void initFrames(ALFBuilder &b);
 			bool shouldSetCondFlags(const MachineInstr &MI);
+			unsigned computeBBcycles(MachineBasicBlock &mbb);
 	};
 	char ARMALFWriter::ID = 0;
 }

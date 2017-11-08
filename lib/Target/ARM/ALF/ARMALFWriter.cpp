@@ -445,9 +445,19 @@ bool ARMALFWriter::shouldSetCondFlags(const MachineInstr &MI)
 	return setsStatusFlags;
 }
 
+unsigned ARMALFWriter::computeBBcycles(MachineBasicBlock &mbb)
+{
+  const TargetInstrInfo *TII = mbb.getParent()->getSubtarget().getInstrInfo();
+  unsigned count = 0;
+  for (MachineInstr &mi : mbb) {
+	  /* count += TII->computeInstrLatency(mi.getOpcode()); */
+  }
+  return count;
+}
 
 bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 {
+	// ALF code for sweet
 	std::string Filename = "arm.alf";
 
 	std::error_code EC;
@@ -470,12 +480,15 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 		init = true;
 	}
 
+	vector<pair<string, unsigned>> BasicBlockCycles;
+
 	auto alffunc = b.addFunction(MF.getName(), MF.getName(), "dit is een test");
 	assert(alffunc && "Error creating ALF function!");
 
 	for (MachineBasicBlock &mbb : MF) {
 		unsigned instrCounter = 0;
 		string BBname = string(MF.getName()) + ":BB#" + std::to_string(mbb.getNumber());
+		/* unsigned cycleCount = computeBBcycles(mbb); */
 		auto alfbb = alffunc->addBasicBlock(BBname, BBname);
 		for (MachineInstr &mi : mbb) {
 			if (mi.isCFIInstruction())
@@ -484,9 +497,23 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 			printInstructionALF(mi, *alfbb, alffunc, labelName); // TableGen
 			instrCounter++;
 		}
+		BasicBlockCycles.push_back({BBname, instrCounter});
 	}
 
 	b.writeToFile(o);
+
+	// cycle count per basic block for SWEET
+	std::string Filename2 = "arm.tdb";
+
+	std::error_code EC2;
+	raw_fd_ostream File2(Filename2, EC2, sys::fs::F_Append);
+
+	if (EC2)
+		return false;
+
+	for (auto pr : BasicBlockCycles) {
+		File2 << std::get<0>(pr) << " " << std::get<1>(pr) << "\n";
+	}
 }
 
 FunctionPass *llvm::createARMALFWriterPass() {
