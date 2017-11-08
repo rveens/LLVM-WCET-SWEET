@@ -22,9 +22,10 @@ static SExpr *t_addrmode_sp_customALF(const MachineInstr &MI, ALFStatementGroup 
 	// make an ALFAddressExpr* using arguments 1 (SP) and 2 (imm)
 	string SP = TRI->getName(MI.getOperand(1).getReg());
 	auto I = MI.getOperand(2).getImm();
-	// compute I*4
-	SExpr *load = ctx->load(32, SP);
-	SExpr *add = ctx->add(32, load, ctx->dec_unsigned(32, I*4), 0);
+	// compute offset = I*4*8
+	SExpr *offset = ctx->dec_unsigned(32, I*4*8);
+	SExpr *SP_times_8 = ctx->select(64, 0, 31, ctx->u_mul(32, 32, ctx->load(32, "SP"), ctx->dec_unsigned(32, 8)));
+	SExpr *add = ctx->add(32, SP_times_8, offset, 0);
 
     return ctx->list("addr")->append(32)
 		->append(ctx->fref("mem"))
@@ -196,7 +197,8 @@ static void tPUSH_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, AL
 		alfbb.addStatement(label + "_" + MO_name + "_decrSP", "tPUSH: decrement SP by 4", subtr);
 		
 		// do str r3 [sp, #-4]
-		SExpr *str = ctx->store(ctx->address("mem", ctx->load(32, "SP")), ctx->load(32, MO_name));
+		SExpr *SP_times_8 = ctx->select(64, 0, 31, ctx->u_mul(32, 32, ctx->load(32, "SP"), ctx->dec_unsigned(32, 8)));
+		SExpr *str = ctx->store(ctx->address("mem", SP_times_8), ctx->load(32, MO_name));
 		alfbb.addStatement(label + "_" + MO_name, string("tPUSH: push {") + MO_name + " }", str);
 	}
 }
@@ -217,7 +219,8 @@ static void tPOP_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALF
 		string MO_name = TRI->getName(MO.getReg());
 
 		// do ldr r3 [sp]    ( store in r3 the value from RMEM at address in SP )
-		SExpr *addrInSP = ctx->load(32, ctx->address("mem", ctx->load(32, "SP")));
+		SExpr *SP_times_8 = ctx->select(64, 0, 31, ctx->u_mul(32, 32, ctx->load(32, "SP"), ctx->dec_unsigned(32, 8)));
+		SExpr *addrInSP = ctx->load(32, ctx->address("mem", SP_times_8));
 		SExpr *ldr = ctx->store(ctx->address(MO_name), addrInSP);
 
 		alfbb.addStatement(label + "_" + MO_name, string("tPOP: pop {") + MO_name + " }", ldr);
@@ -331,7 +334,7 @@ static void tBcc_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALF
 					);
 			break;
 		case (ARMCC::LE):
-			cond = ctx->and_(1, 
+			cond = ctx->or_(1, 
 					ctx->eq(1, loadZ, ctx->dec_unsigned(1, 1)),
 					ctx->neq(1, loadN, loadV)
 					);
