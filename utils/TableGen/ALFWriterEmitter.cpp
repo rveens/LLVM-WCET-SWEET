@@ -447,17 +447,15 @@ public:
 			return;
 		// assume the first 
 		O << "      ALFStatement *statement;\n";
-		O << "      SExpr *value, *byteaddress;\n";
+		O << "      SExpr *value, *address;\n";
 
 		handleDefaultOperand(O, "value", info->leafs[0]);
 
-		handleDefaultOperand(O, "byteaddress", info->leafs[1]);
+		handleDefaultOperand(O, "address", info->leafs[1]);
 
-		O << "      SExpr *bytes_to_bits = ctx->select(64, 0, 31, ctx->u_mul(32, 32, byteaddress, ctx->dec_unsigned(32, 8)));\n";
+		/* O << "      SExpr *bytes_to_bits = ctx->select(64, 0, 31, ctx->u_mul(32, 32, byteaddress, ctx->dec_unsigned(32, 8)));\n"; */
 
-		O << "      SExpr *addr = ctx->address(\"mem\", bytes_to_bits);\n";
-
-		O << "      SExpr *stor = ctx->store(addr, value);\n";
+		O << "      SExpr *stor = ctx->store(address, value);\n";
 		O << "      statement = alfbb.addStatement(label, comment, stor);\n";
 	}
 

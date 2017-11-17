@@ -26,13 +26,55 @@ static SExpr *t_addrmode_sp_customALF(const MachineInstr &MI, ALFStatementGroup 
 	auto I = MI.getOperand(2).getImm();
 	// compute offset = I*4*8
 	SExpr *offset = ctx->dec_unsigned(32, I*4*8);
-	SExpr *SP_times_8 = ctx->select(64, 0, 31, ctx->u_mul(32, 32, ctx->load(32, "SP"), ctx->dec_unsigned(32, 8)));
+	SExpr *SP_times_8 = ctx->select(64, 0, 31, ctx->u_mul(32, 32, ctx->load(32, SP), ctx->dec_unsigned(32, 8)));
 	SExpr *add = ctx->add(32, SP_times_8, offset, 0);
 
     return ctx->list("addr")->append(32)
 		->append(ctx->fref("mem"))
 		->append(add);
 }
+
+static SExpr *t_addrmode_rr_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* tSTRr %R4<kill>, %R0, %R3<kill>, pred:14, pred:%noreg; mem:ST4[%arrayidx12] dbg:insertsort.c:76:7 */
+	/* %R3<def> = tLDRr %R0, %R2, pred:14, pred:%noreg; mem:LD4[%arrayidx] dbg:insertsort.c:70:14 */
+
+	// make an ALFAddressExpr* using arguments 1 (SP) and 2 (imm)
+	string Reg = TRI->getName(MI.getOperand(1).getReg());
+	string RegOff = TRI->getName(MI.getOperand(2).getReg());
+
+	// compute offset = RegOff*8
+	SExpr *offset = ctx->select(64, 0, 31, ctx->u_mul(32, 32, ctx->load(32, RegOff), ctx->dec_unsigned(32, 8)));
+
+	SExpr *bytes_to_bits = ctx->select(64, 0, 31, ctx->u_mul(32, 32, ctx->load(32, Reg), ctx->dec_unsigned(32, 8)));
+	SExpr *add = ctx->add(32, bytes_to_bits, offset, 0);
+
+    return ctx->list("addr")->append(32)
+		->append(ctx->fref("mem"))
+		->append(add);
+}
+
+/* static SExpr *t_addrmode_is4_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label) */
+/* { */
+/* 	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo(); */
+/* 	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo(); */
+
+/*   	/1* tSTRi %R1<kill>, %R0, 0, pred:14, pred:%noreg; mem:ST4[getelementptr inbounds ([11 x i32], [11 x i32]* @a, i64 0, i64 0)](align=16) dbg:insertsort.c:58:8 *1/ */
+	
+/* 	/1* string Reg = TRI->getName(MI.getOperand(1).getReg()); *1/ */
+/* 	/1* auto I = MI.getOperand(2).getImm(); *1/ */
+/* 	/1* // compute offset = I*4*8 *1/ */
+/* 	/1* SExpr *offset = ctx->dec_unsigned(32, I*4*8); *1/ */
+/* 	/1* SExpr *SP_times_8 = ctx->select(64, 0, 31, ctx->u_mul(32, 32, ctx->load(32, "SP"), ctx->dec_unsigned(32, 8))); *1/ */
+/* 	/1* SExpr *add = ctx->add(32, SP_times_8, offset, 0); *1/ */
+
+/*     return ctx->list("addr")->append(32) */
+/* 		->append(ctx->fref("mem")) */
+/* 		->append(add); */
+/* } */
 
 // custom operator nodes
 static SExpr *ARMcmp_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
@@ -358,9 +400,9 @@ static void tLDRpci_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, 
 
 	SExpr *cpVal = ctx->load(32, cpString);
 
-	SExpr *bytes_to_bits = ctx->select(64, 0, 31, ctx->u_mul(32, 32, cpVal, ctx->dec_unsigned(32, 8)));
+	/* SExpr *bytes_to_bits = ctx->select(64, 0, 31, ctx->u_mul(32, 32, cpVal, ctx->dec_unsigned(32, 8))); */
 
-	SExpr *stor = ctx->store(ctx->address(TRI->getName(MI.getOperand(0).getReg())), bytes_to_bits);
+	SExpr *stor = ctx->store(ctx->address(TRI->getName(MI.getOperand(0).getReg())), cpVal);
 
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
 }
