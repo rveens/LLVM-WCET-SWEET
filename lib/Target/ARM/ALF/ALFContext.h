@@ -165,6 +165,13 @@ public:
                 ->append(Op1)
                 ->append(Op2);
     }
+    SExpr* r_shift_a(unsigned BitWidth1, unsigned BitWidth2, SExpr *Op1, SExpr *Op2) {
+        return list("r_shift_a")
+                ->append(BitWidth1)
+                ->append(BitWidth2)
+                ->append(Op1)
+                ->append(Op2);
+    }
     SExpr* add(unsigned BitWidth, SExpr *Op1, SExpr *Op2, uint8_t Carry = 0) {
         return list("add")
                 ->append(BitWidth)
@@ -209,6 +216,13 @@ public:
     }
     SExpr* u_mul(unsigned BitWidthM, unsigned BitWidthN, SExpr *Op1, SExpr *Op2) {
         return list("u_mul")
+                ->append(BitWidthM)
+                ->append(BitWidthN)
+                ->append(Op1)
+                ->append(Op2);
+    }
+    SExpr* s_mul(unsigned BitWidthM, unsigned BitWidthN, SExpr *Op1, SExpr *Op2) {
+        return list("s_mul")
                 ->append(BitWidthM)
                 ->append(BitWidthN)
                 ->append(Op1)

@@ -1219,6 +1219,7 @@ def tSUBi3 :                    // A8.6.210 T1
                    Sched<[WriteALU]> {
   bits<3> imm3;
   let Inst{8-6} = imm3;
+  let ALFCustomMethod = "tSUBi_customALF";
 }
 
 def tSUBi8 :                    // A8.6.210 T2
@@ -1226,7 +1227,9 @@ def tSUBi8 :                    // A8.6.210 T2
                     (ins tGPR:$Rn, imm0_255:$imm8), IIC_iALUi,
                     "sub", "\t$Rdn, $imm8",
                     [(set tGPR:$Rdn, (add tGPR:$Rn, imm8_255_neg:$imm8))]>,
-                    Sched<[WriteALU]>;
+                    Sched<[WriteALU]> {
+  let ALFCustomMethod = "tSUBi_customALF";
+}
 
 // Subtract register
 def tSUBrr :                    // A8.6.212

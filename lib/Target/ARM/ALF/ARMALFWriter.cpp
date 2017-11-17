@@ -6,6 +6,8 @@
 #include "llvm/Support/FileSystem.h"
 
 #include "llvm/CodeGen/MachineConstantPool.h"
+#include "ARMConstantPoolValue.h"
+
 
 #include "../MCTargetDesc/ARMBaseInfo.h"
 
@@ -32,40 +34,6 @@ static SExpr *t_addrmode_sp_customALF(const MachineInstr &MI, ALFStatementGroup 
 		->append(add);
 }
 
-/* static SExpr *calc_NZCV(SExpr *op1, SExpr *op2, SExpr *output, SExpr *output_c) */
-/* { */
-/* 	SExpr *csub = ctx->c_sub(32, op1, op2, 0); */
-/* 	SExpr *output = ctx->sub(32, op1, op2, 0); */
-
-/* 	// overflow if pos - neg = pos */
-/* 	// overflow if neg - pos = neg */
-/* 	SExpr *arg1_pos = ctx->s_ge(32, op1, ctx->dec_unsigned(32, 0)); */
-/* 	SExpr *arg2_pos = ctx->s_ge(32, op2, ctx->dec_unsigned(32, 0)); */
-/* 	SExpr *output_pos = ctx->s_ge(32, output, ctx->dec_unsigned(32, 0)); */
-/* 	SExpr *arg1_neg = ctx->s_lt(32, op1, ctx->dec_unsigned(32, 0)); */
-/* 	SExpr *arg2_neg = ctx->s_lt(32, op2, ctx->dec_unsigned(32, 0)); */
-/* 	SExpr *output_neg = ctx->s_lt(32, output, ctx->dec_unsigned(32, 0)); */
-/* 	SExpr *V = ctx->or_(1, */
-/* 			ctx->and_(1, ctx->and_(1, arg1_pos, arg2_neg), output_pos), */ 
-/* 			ctx->and_(1, ctx->and_(1, arg1_neg, arg2_pos), output_neg) */
-/* 			); */
-
-/* 	SExpr *expr_nzcv = ctx->conc(4, 28, */ 
-/* 		ctx->conc(2, 2, */ 
-/* 			ctx->conc(1, 1, */ 
-/* 			  ctx->s_lt(32, output, ctx->dec_unsigned(32, 0)), */
-/* 			  ctx->eq(32, output, ctx->dec_unsigned(32, 0)) */
-/* 			), */
-/* 			ctx->conc(1, 1, */ 
-/* 				output_c, */
-/* 				V */
-/* 			) */
-/* 		), */
-/* 		ctx->dec_unsigned(28, 0) */
-/* 	); */
-/* 	ctx->store(ctx->address("CPSR"), expr_nzcv); */ 
-/* } */
-
 // custom operator nodes
 static SExpr *ARMcmp_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
 {
@@ -85,8 +53,9 @@ static SExpr *ARMcmp_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb,
 	SExpr *csub = ctx->c_sub(32, ctx->load(32, Rn), arg2_sexpr, 1);
 	SExpr *output = ctx->sub(32, ctx->load(32, Rn), arg2_sexpr, 1);
 
-	// overflow if pos - neg = pos
-	// overflow if neg - pos = neg
+	// overflow on substract
+	// overflow if pos - neg = neg
+	// overflow if neg - pos = pos
 	SExpr *arg1_pos = ctx->s_ge(32, ctx->load(32, Rn), ctx->dec_unsigned(32, 0));
 	SExpr *arg2_pos = ctx->s_ge(32, arg2_sexpr, ctx->dec_unsigned(32, 0));
 	SExpr *output_pos = ctx->s_ge(32, output, ctx->dec_unsigned(32, 0));
@@ -94,8 +63,8 @@ static SExpr *ARMcmp_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb,
 	SExpr *arg2_neg = ctx->s_lt(32, arg2_sexpr, ctx->dec_unsigned(32, 0));
 	SExpr *output_neg = ctx->s_lt(32, output, ctx->dec_unsigned(32, 0));
 	SExpr *V = ctx->or_(1,
-			ctx->and_(1, ctx->and_(1, arg1_pos, arg2_neg), output_pos), 
-			ctx->and_(1, ctx->and_(1, arg1_neg, arg2_pos), output_neg)
+			ctx->and_(1, ctx->and_(1, arg1_pos, arg2_neg), output_neg), 
+			ctx->and_(1, ctx->and_(1, arg1_neg, arg2_pos), output_pos)
 			);
 
 	SExpr *expr_nzcv = ctx->conc(4, 28, 
@@ -154,6 +123,26 @@ static void tADDspi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, 
 
 	SExpr *stor = ctx->store(ctx->address(SP), add);
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
+}
+
+static void tSUBi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+  /* %R0<def,tied2>, %CPSR<def,dead> = tSUBi8 %R0<kill,tied0>, 10, pred:14, pred:%noreg; dbg:janne_complex.c:45:13 */
+	string R = TRI->getName(MI.getOperand(0).getReg());
+	string Rop1 = TRI->getName(MI.getOperand(2).getReg());
+	auto op2 = MI.getOperand(3).getImm();
+
+	SExpr *sub = ctx->sub(32, ctx->load(32, Rop1), ctx->dec_signed(32, op2));
+	SExpr *sub_c = ctx->c_sub(32, ctx->load(32, Rop1), ctx->dec_signed(32, op2));
+
+	SExpr *stor = ctx->store(ctx->address(R), sub);
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
+
+	SExpr *stor_condflags = calcNZCV(ctx, ctx->load(32, Rop1), ctx->dec_signed(32, op2), sub, sub_c);
+	alfbb.addStatement(label + "_NZCV", "", stor_condflags);
 }
 
 static void tSUBspi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
@@ -253,7 +242,9 @@ static void tBL_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFC
 
 	/* BL pred:14, pred:%noreg, <ga:@test>, <regmask %LR %D8 %D9 %D10 %D11 %D12 %D13 %D14 %D15 %Q4 %Q5 %Q6 %Q7 %R4 %R5 %R6 %R7 %R8 %R9 %R10 %R11 %S16 %S17 %S18 %S19 %S20 %S21 %S22 %S23 %S24 %S25 %S26 %S27 %S28 %S29 %S30 %S31 %D8_D10 %D9_D11 %D10_D12 %D11_D13 %D12_D14 %D13_D15 %Q4_Q5 %Q5_Q6 %Q6_Q7 %Q4_Q5_Q6_Q7 %R4_R5 %R6_R7 %R8_R9 %R10_R11 %D8_D9_D10 %D9_D10_D11 %D10_D11_D12 %D11_D12_D13 %D12_D13_D14 %D13_D14_D15 %D8_D10_D12 %D9_D11_D13 %D10_D12_D14 %D11_D13_D15 %D8_D10_D12_D14 %D9_D11_D13_D15 %D9_D10 %D11_D12 %D13_D14 %D9_D10_D11_D12 %D11_D12_D13_D14>, %LR<imp-def,dead>, %SP<imp-use>, %R0<imp-use>, %SP<imp-def>, %R0<imp-def> */
 	// find the label in the 3ith ([2]) argument.
-	string jumpLabel = MI.getOperand(2).getGlobal()->getName();
+	string jumpLabel = "ERROR";
+	if (MI.getOperand(2).isGlobal())
+	 	jumpLabel = MI.getOperand(2).getGlobal()->getName();
 	SExpr *call = ctx->call(ctx->labelRef(jumpLabel));
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), call);
 }
@@ -448,9 +439,12 @@ bool ARMALFWriter::shouldSetCondFlags(const MachineInstr &MI)
 unsigned ARMALFWriter::computeBBcycles(MachineBasicBlock &mbb)
 {
   const TargetInstrInfo *TII = mbb.getParent()->getSubtarget().getInstrInfo();
+  const InstrItineraryData *ItinData = mbb.getParent()->getSubtarget().getInstrItineraryData();
   unsigned count = 0;
   for (MachineInstr &mi : mbb) {
-	  /* count += TII->computeInstrLatency(mi.getOpcode()); */
+	  count += TII->getInstrLatency(ItinData, mi);
+	  dbgs() << "cycles van de volgende instructie: " << std::to_string(TII->getInstrLatency(ItinData, mi));
+	  mi.dump();
   }
   return count;
 }
@@ -488,7 +482,6 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 	for (MachineBasicBlock &mbb : MF) {
 		unsigned instrCounter = 0;
 		string BBname = string(MF.getName()) + ":BB#" + std::to_string(mbb.getNumber());
-		/* unsigned cycleCount = computeBBcycles(mbb); */
 		auto alfbb = alffunc->addBasicBlock(BBname, BBname);
 		for (MachineInstr &mi : mbb) {
 			if (mi.isCFIInstruction())
@@ -497,7 +490,8 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 			printInstructionALF(mi, *alfbb, alffunc, labelName); // TableGen
 			instrCounter++;
 		}
-		BasicBlockCycles.push_back({BBname, instrCounter});
+		unsigned cycleCount = computeBBcycles(mbb);
+		BasicBlockCycles.push_back({BBname, cycleCount});
 	}
 
 	b.writeToFile(o);
