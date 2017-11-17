@@ -210,16 +210,20 @@ protected:
 			if (!cpR->getValueAsString("ALFCustomMethod").empty()) {
 				O << "      " << returnVariable << " = " << cpR->getValueAsString("ALFCustomMethod") << "(MI, alfbb, ctx, label);"<< "\n";
 				return; //done!
+			} else {
+				// complexnode not handled, add an undefined
+				O << "        " << returnVariable << " = ctx->undefined(32);\n";
 			}
+		} else {
+			// else check on MI operand what to do
+			O << "      if (MI.getOperand(" << leaf.MIindex << ").isReg()) {\n";
+			O << "        " << returnVariable << " = ctx->load(32, TRI->getName(MI.getOperand(" << leaf.MIindex << ").getReg()));\n";
+			O << "      } else if (MI.getOperand(" << leaf.MIindex << ").isImm()) {\n";
+			O << "        " << returnVariable << " = ctx->dec_unsigned(32, MI.getOperand(" << leaf.MIindex << ").getImm());\n";
+			O << "      } else {\n";
+			O << "        " << returnVariable << " = ctx->undefined(32);\n";
+			O << "      }\n";
 		}
-		// else check on MI operand what to do
-		O << "      if (MI.getOperand(" << leaf.MIindex << ").isReg()) {\n";
-		O << "        " << returnVariable << " = ctx->load(32, TRI->getName(MI.getOperand(" << leaf.MIindex << ").getReg()));\n";
-		O << "      } else if (MI.getOperand(" << leaf.MIindex << ").isImm()) {\n";
-		O << "        " << returnVariable << " = ctx->dec_unsigned(32, MI.getOperand(" << leaf.MIindex << ").getImm());\n";
-		O << "      } else {\n";
-		O << "        " << returnVariable << " = ctx->undefined(32);\n";
-		O << "      }\n";
 	}
 };
 } // end anonymous namespace
@@ -443,13 +447,17 @@ public:
 			return;
 		// assume the first 
 		O << "      ALFStatement *statement;\n";
-		O << "      SExpr *address;\n";
+		O << "      SExpr *value, *byteaddress;\n";
 
-		O << "      SExpr *storValue = ctx->load(32, TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg()));\n";
+		handleDefaultOperand(O, "value", info->leafs[0]);
 
-		handleDefaultOperand(O, "address", info->leafs[1]);
+		handleDefaultOperand(O, "byteaddress", info->leafs[1]);
 
-		O << "      SExpr *stor = ctx->store(address, storValue);\n";
+		O << "      SExpr *bytes_to_bits = ctx->select(64, 0, 31, ctx->u_mul(32, 32, byteaddress, ctx->dec_unsigned(32, 8)));\n";
+
+		O << "      SExpr *addr = ctx->address(\"mem\", bytes_to_bits);\n";
+
+		O << "      SExpr *stor = ctx->store(addr, value);\n";
 		O << "      statement = alfbb.addStatement(label, comment, stor);\n";
 	}
 

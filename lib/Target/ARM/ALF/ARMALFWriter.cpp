@@ -350,23 +350,17 @@ static void tLDRpci_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, 
 	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
 
 	/* %R0<def> = tLDRpci <cp#0>, pred:14, pred:%noreg; mem:LD4[ConstantPool] */
-	/* unsigned CPI = MI.getOperand(1).getIndex(); */
-	/* const MachineConstantPool *MCP = MI.getParent()->getParent()->getConstantPool(); */
-	/* /1* if (CPI >= MCP->getConstants().size()) *1/ */
-	/* /1* 	CPI = AFI.getOriginalCPIdx(CPI); *1/ */
-	/* assert(CPI != -1U && "Invalid constpool index"); */
 
-	/* // Derive the actual offset. */
-	/* const MachineConstantPoolEntry &CPE = MCP->getConstants()[CPI]; */
-	/* assert(!CPE.isMachineConstantPoolEntry() && "Invalid constpool entry"); */
+	const MachineConstantPool *MCP = MI.getParent()->getParent()->getConstantPool();
+	MachineConstantPoolEntry mcpe = MCP->getConstants()[MI.getOperand(1).getIndex()];
+	const Constant *cv = mcpe.Val.ConstVal;
+	string cpString = "%" + string(cv->getName());
 
-	/* const Constant *constValue = cast<GlobalVariable>(CPE.Val.ConstVal)->getInitializer(); */
-	/* const ConstantInt* constInt = cast<ConstantInt>(constValue); */
-	/* int64_t constIntValue = constInt->getSExtValue(); */
+	SExpr *cpVal = ctx->load(32, cpString);
 
-	SExpr *cpVal = ctx->dec_unsigned(32, 0);
+	SExpr *bytes_to_bits = ctx->select(64, 0, 31, ctx->u_mul(32, 32, cpVal, ctx->dec_unsigned(32, 8)));
 
-	SExpr *stor = ctx->store(ctx->address(TRI->getName(MI.getOperand(0).getReg())), cpVal);
+	SExpr *stor = ctx->store(ctx->address(TRI->getName(MI.getOperand(0).getReg())), bytes_to_bits);
 
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
 }
@@ -388,9 +382,16 @@ static void tMOVr_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, AL
 #include "ARMGenALFWriter.inc"
 
 
-void ARMALFWriter::extraFrames(ALFBuilder &b)
+void ARMALFWriter::extraFrames(ALFBuilder &b, const MachineConstantPool *MCP)
 {
-	/* b.addFrame("", 32, InternalFrame); */
+	auto csts = MCP->getConstants();
+	for (MachineConstantPoolEntry mcpe : csts) {
+		const Constant *cv = mcpe.Val.ConstVal;
+		b.addFrame(string("%") + cv->getName(), 32, InternalFrame);
+	}
+
+	/* SExpr *stor = ctx->store(ctx->address(target), load); */
+	/* alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor); */
 }
 
 void ARMALFWriter::initFrames(ALFBuilder &b)
@@ -469,10 +470,10 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 		b.setLittleEndian(true);
 
 		regDefALF(b); // TableGen
-		extraFrames(b);
 		initFrames(b);
 		init = true;
 	}
+	extraFrames(b, MF.getConstantPool());
 
 	vector<pair<string, unsigned>> BasicBlockCycles;
 

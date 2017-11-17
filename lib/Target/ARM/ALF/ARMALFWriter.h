@@ -21,7 +21,7 @@ namespace {
 			void printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label);
 			void regDefALF(ALFBuilder &b);
 		private:
-			void extraFrames(ALFBuilder &b);
+			void extraFrames(ALFBuilder &b, const MachineConstantPool *MCP);
 			void initFrames(ALFBuilder &b);
 			bool shouldSetCondFlags(const MachineInstr &MI);
 			unsigned computeBBcycles(MachineBasicBlock &mbb);
