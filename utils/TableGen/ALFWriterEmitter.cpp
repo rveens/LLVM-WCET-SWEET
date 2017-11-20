@@ -20,6 +20,7 @@ namespace {
 struct ALFConditionFlag {
 	Record *TheDef;
 	unsigned Bitposition;
+	unsigned Size;
 	Record *Reg;
 
 	ALFConditionFlag() : TheDef(nullptr), Bitposition(0), Reg(nullptr)
@@ -31,6 +32,8 @@ struct ALFConditionFlag {
 		assert(R && "Record is a nullptr!");
 		Bitposition = R->getValueAsInt("Bitposition");
 		Reg = R->getValueAsDef("Reg");
+		/* Size = Reg->getValueAsInt("Alignment"); */
+		Size = 32;
 	}
 	virtual ~ALFConditionFlag() { };
 };
@@ -244,16 +247,16 @@ protected:
 				return; //done!
 			} else {
 				// complexnode not handled, add an undefined
-				O << "        " << returnVariable << " = ctx->undefined(32);\n";
+				O << "        " << returnVariable << " = ctx->undefined(1);\n";
 			}
 		} else {
 			// else check on MI operand what to do
 			O << "      if (MI.getOperand(" << leaf.MIindex << ").isReg()) {\n";
-			O << "        " << returnVariable << " = ctx->load(32, TRI->getName(MI.getOperand(" << leaf.MIindex << ").getReg()));\n";
+			O << "        " << returnVariable << " = ctx->load("<<leaf.bitsize<<", TRI->getName(MI.getOperand(" << leaf.MIindex << ").getReg()));\n";
 			O << "      } else if (MI.getOperand(" << leaf.MIindex << ").isImm()) {\n";
-			O << "        " << returnVariable << " = ctx->dec_unsigned(32, MI.getOperand(" << leaf.MIindex << ").getImm());\n";
+			O << "        " << returnVariable << " = ctx->dec_unsigned("<<leaf.bitsize<<", MI.getOperand(" << leaf.MIindex << ").getImm());\n";
 			O << "      } else {\n";
-			O << "        " << returnVariable << " = ctx->undefined(32);\n";
+			O << "        " << returnVariable << " = ctx->undefined(1);\n";
 			O << "      }\n";
 		}
 	}
@@ -301,8 +304,10 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      output = ctx->add(32, op1, op2, 0);\n";
-				O << "      output_carry = ctx->c_add(32, op1, op2, 0);\n";
+				unsigned bitsize = info->operators[1].bitsize;
+
+				O << "      output = ctx->add(" << bitsize <<", op1, op2, 0);\n";
+				O << "      output_carry = ctx->c_add("<<bitsize<<", op1, op2, 0);\n";
 
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 
@@ -314,8 +319,10 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      output = ctx->sub(32, op1, op2, 1);\n";
-				O << "      output_carry = ctx->c_sub(32, op1, op2, 1);\n";
+				unsigned bitsize = info->operators[1].bitsize;
+
+				O << "      output = ctx->sub("<<bitsize<<", op1, op2, 1);\n";
+				O << "      output_carry = ctx->c_sub("<<bitsize<<", op1, op2, 1);\n";
 
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 
@@ -326,7 +333,9 @@ public:
 
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 
-				O << "      SExpr *load = ctx->load(32, op1);\n";
+				unsigned bitsize = info->operators[1].bitsize;
+
+				O << "      SExpr *load = ctx->load("<<bitsize<<", op1);\n";
 				O << "      stor = ctx->store(ctx->address(targetReg), load);\n";
 			} else if (info->hasPattern({"set", "shl"})) {
 				// assume the first index is a target register,
@@ -337,7 +346,10 @@ public:
 				// and assume the third index is registers or immediates
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      output = ctx->l_shift(32, 32, op1, op2);\n";
+				unsigned op1bitsize = info->leafs[1].bitsize;
+				unsigned op2bitsize = info->leafs[2].bitsize;
+
+				O << "      output = ctx->l_shift("<<op1bitsize<<", "<<op1bitsize<<", op1, op2);\n";
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "sra"})) {
 				// assume the first index is a target register,
@@ -348,7 +360,10 @@ public:
 				// and assume the third index is registers or immediates
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      output = ctx->r_shift_a(32, 32, op1, op2);\n";
+				unsigned op1bitsize = info->leafs[1].bitsize;
+				unsigned op2bitsize = info->leafs[2].bitsize;
+
+				O << "      output = ctx->r_shift_a("<<op1bitsize<<", "<<op1bitsize<<", op1, op2);\n";
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "mul"})) {
 				// assume the first index is a target register,
@@ -359,8 +374,12 @@ public:
 				// and assume the third index is registers or immediates
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      SExpr *temp = ctx->s_mul(32, 32, op1, op2);\n";
-				O << "      output = ctx->select(64, 0, 31, temp);\n";
+				unsigned op1bitsize = info->leafs[1].bitsize;
+				unsigned op2bitsize = info->leafs[2].bitsize;
+				unsigned operatorBitsize = info->operators[1].bitsize;
+
+				O << "      SExpr *temp = ctx->s_mul("<<op1bitsize<<", "<<op2bitsize<<", op1, op2);\n";
+				O << "      output = ctx->select("<<op1bitsize*op2bitsize<<", 0, "<<operatorBitsize-1<<", temp);\n";
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "xor"})) {
 				// assume the first index is a target register,
@@ -369,14 +388,16 @@ public:
 				// and assume the second index is registers or immediates
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 
-				// if there is no 3th argument we asssume this is (set not .. ), or ( set xor .. -1 )
+				// HACK if there is no 3th argument we asssume this is (set not .. ), or ( set xor .. -1 )
 				if (info->leafs.size() != 3) {
 					O << "      op2 = ctx->dec_signed(32, -1);\n";
 				} else {
 					handleDefaultOperand(O, "op2", info->leafs[2]);
 				}
 
-				O << "      output = ctx->xor_(32, op1, op2);\n";
+				unsigned bitsize = info->operators[1].bitsize;
+
+				O << "      output = ctx->xor_("<<bitsize<<", op1, op2);\n";
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "adde"})) {
 				// assume the first index is a register,
@@ -388,9 +409,13 @@ public:
 
 				unsigned CarrybitPos = writer.Cflag.Bitposition;
 				string CarryRegName = writer.Cflag.Reg->getName();
-				O << "      SExpr *loadC = ctx->select(32, " << CarrybitPos <<  ", " << CarrybitPos << ", ctx->load(32, \"" << CarryRegName << "\"));\n";
-				O << "      output = ctx->add2(32, op1, op2, loadC);\n";
-				O << "      output_carry = ctx->c_add2(32, op1, op2, loadC);\n";
+				unsigned CarryRegsize = writer.Cflag.Size;
+
+				unsigned bitsize = info->operators[1].bitsize;
+
+				O << "      SExpr *loadC = ctx->select("<<CarryRegsize<<", " << CarrybitPos <<  ", " << CarrybitPos << ", ctx->load("<<CarryRegsize<<", \"" << CarryRegName << "\"));\n";
+				O << "      output = ctx->add2("<<bitsize<<", op1, op2, loadC);\n";
+				O << "      output_carry = ctx->c_add2("<<bitsize<<", op1, op2, loadC);\n";
 
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 
@@ -402,7 +427,9 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      output = ctx->or_(32, op1, op2);\n";
+				unsigned bitsize = info->operators[1].bitsize;
+
+				O << "      output = ctx->or_("<<bitsize<<", op1, op2);\n";
 
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "and"})) {
@@ -413,7 +440,9 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				O << "      output = ctx->and_(32, op1, op2);\n";
+				unsigned bitsize = info->operators[1].bitsize;
+
+				O << "      output = ctx->and_("<<bitsize<<", op1, op2);\n";
 
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else {
