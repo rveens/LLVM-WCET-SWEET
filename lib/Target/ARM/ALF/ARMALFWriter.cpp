@@ -471,7 +471,6 @@ bool ARMALFWriter::shouldSetCondFlags(const MachineInstr &MI)
 	for (unsigned i = 0; i < MI.getNumOperands(); i++) {
 		if (MI.getOperand(i).isReg() && 
 				TRI->getName(MI.getOperand(i).getReg()) == string("CPSR")) {
-			dbgs() << "Deze instr heeft een CPSR! (s) \n";
 			MI.print(dbgs());
 			setsStatusFlags = true;
 		}
@@ -484,10 +483,78 @@ unsigned ARMALFWriter::computeBBcycles(MachineBasicBlock &mbb)
   const TargetInstrInfo *TII = mbb.getParent()->getSubtarget().getInstrInfo();
   const InstrItineraryData *ItinData = mbb.getParent()->getSubtarget().getInstrItineraryData();
   unsigned count = 0;
+
+  /* for (MachineInstr &mi : mbb) { */
+	  /* count += TII->getInstrLatency(ItinData, mi); */
+	  /* dbgs() << "cycles van de volgende instructie: " << std::to_string(TII->getInstrLatency(ItinData, mi)); */
+	  /* mi.dump(); */
+  /* } */
+
   for (MachineInstr &mi : mbb) {
-	  count += TII->getInstrLatency(ItinData, mi);
-	  dbgs() << "cycles van de volgende instructie: " << std::to_string(TII->getInstrLatency(ItinData, mi));
-	  mi.dump();
+	  unsigned Opcode = mi.getOpcode();
+
+	  switch (Opcode) {
+		  case ARM::tPUSH:
+			  for (unsigned i = mi.getNumOperands() - 3, NumOps = 1;
+					  i != NumOps; --i) {
+				  count += 1;
+			  }
+			  count += 1;
+			  break;
+		  case ARM::tPOP_RET:
+			  for (unsigned i = 2, NumOps = mi.getNumOperands() - 3;
+					  i != NumOps; ++i) {
+				  count += 1;
+			  }
+			  count += 4;
+			  break;
+		  case ARM::tADDrr:
+		  case ARM::tADDi3:
+		  case ARM::tCMPi8:
+		  case ARM::tCMPr:
+		  case ARM::tADDrSPi:
+		  case ARM::tADDspi:
+		  case ARM::tSUBspi:
+		  case ARM::tSUBrr:
+		  case ARM::tSUBi3:
+		  case ARM::tMOVi8:
+		  case ARM::tMOVr:
+		  case ARM::tLSLri:
+		  case ARM::tLSRri:
+		  case ARM::tBIC:
+		  case ARM::tASRri:
+		  case ARM::tMVN:
+			  count += 1;
+			  break;
+		  case ARM::tSTRspi:
+		  case ARM::tLDRspi:
+		  case ARM::tLDRBi:
+		  case ARM::tLDRpci:
+		  case ARM::tSTRi:
+		  case ARM::tSTRr:
+		  case ARM::tSTRBi:
+		  case ARM::tSTRBr:
+		  case ARM::tLDRi:
+		  case ARM::tLDRr:
+			  count += 2;
+			  break;
+		  case ARM::tBcc:
+		  case ARM::tB:
+		  case ARM::tBL:
+		  case ARM::tBX_RET:
+			  count += 4;
+			  break;
+		  case ARM::CFI_INSTRUCTION:
+		  case ARM::DBG_VALUE:
+		  case ARM::JUMPTABLE_TBB:
+		  case ARM::tTBB_JT:
+		  case ARM::CONSTPOOL_ENTRY:
+			  count += 0;
+			  break;
+		  default:
+			  dbgs() << "Geen cycle-count voor instr: ";
+			  mi.dump();
+	  }
   }
   return count;
 }

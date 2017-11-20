@@ -247,6 +247,7 @@ def t_addrmode_is1 : MemOperand,
   let PrintMethod = "printThumbAddrModeImm5S1Operand";
   let ParserMatchClass = t_addrmode_is1_asm_operand;
   let MIOperandInfo = (ops tGPR:$base, i32imm:$offsimm);
+  let ALFCustomMethod = "t_addrmode_sp_customALF";
 }
 
 // t_addrmode_sp := sp + imm8 * 4

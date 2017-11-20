@@ -69,9 +69,21 @@ struct ALFDAGOperator
 public:
 	TreePatternNode *Operator;
 	string name;
+	unsigned bitsize = 0;
 
 	ALFDAGOperator(TreePatternNode *_op) : Operator(_op), name(_op->getOperator()->getName())
 	{
+		// set bitsize
+		if (Operator) {
+			// assume there is one
+			if (Operator->getNumTypes() == 1) {
+				auto svt = Operator->getType(0);
+				MVT t(svt);
+				if (t.isValid() && t != MVT::Other) {
+					bitsize = t.getSizeInBits();
+				}
+			}
+		}
 	}
 	virtual ~ALFDAGOperator () {};
 
@@ -83,9 +95,20 @@ struct ALFDAGLeaf
 public:
 	TreePatternNode *leaf;
 	unsigned MIindex;
+	unsigned bitsize = 0; 
 
 	ALFDAGLeaf(TreePatternNode *_leaf, unsigned MIindex) : leaf(_leaf), MIindex(MIindex)
 	{
+		// set bitsize
+		if (leaf) {
+			// assume there is one
+			if (leaf->getNumTypes() == 1) {
+				auto svt = leaf->getType(0);
+				MVT t(svt);
+				if (t.isValid() && t != MVT::Other)
+					bitsize = t.getSizeInBits();
+			}
+		}
 	}
 	virtual ~ALFDAGLeaf () { };
 
@@ -139,6 +162,7 @@ public:
 	{
 			// Print some comments first for each instr
 			const DAGInstruction &daginst = CGDP.getInstruction(I->TheDef);
+
 			auto treepattern = daginst.getPattern();
 			// print the full Pattern field
 			if (treepattern) {
@@ -161,7 +185,15 @@ public:
 			// print the names of the DAG operators like set, st
 			O << "      //operatorNames: ";
 			for (auto op : operators) {
-				O << op.name << " ";
+				O << op.name << ":" << op.bitsize << " ";
+			}
+			O << "\n";
+			// print predicate functions per operator
+			O << "      //(test)predicateFns: ";
+			for (auto op : operators) {
+				auto fns = op.Operator->getPredicateFns();
+				for (auto fn : fns)
+					O << fn.getFnName() << " ";
 			}
 			O << "\n";
 			// print complex leafs if any
