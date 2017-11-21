@@ -183,7 +183,7 @@ static void tSUBi_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, AL
 	SExpr *stor = ctx->store(ctx->address(R), sub);
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
 
-	SExpr *stor_condflags = calcNZCV(ctx, ctx->load(32, Rop1), ctx->dec_signed(32, op2), sub, sub_c);
+	SExpr *stor_condflags = calcNZCV(ctx, ctx->load(32, Rop1), ctx->dec_signed(32, op2), sub, sub_c, 32, 32, 32);
 	alfbb.addStatement(label + "_NZCV", "", stor_condflags);
 }
 

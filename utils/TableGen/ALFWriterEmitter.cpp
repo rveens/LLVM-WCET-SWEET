@@ -27,13 +27,17 @@ struct ALFConditionFlag {
 	{
 	}
 
-	ALFConditionFlag(Record *R) : TheDef(R)
+	ALFConditionFlag(Record *R, CodeGenTarget &Target) : TheDef(R)
 	{
 		assert(R && "Record is a nullptr!");
 		Bitposition = R->getValueAsInt("Bitposition");
 		Reg = R->getValueAsDef("Reg");
-		/* Size = Reg->getValueAsInt("Alignment"); */
-		Size = 32;
+
+		// find size
+		CodeGenRegBank &RegBank = Target.getRegBank();
+		const CodeGenRegisterClass *rclass = RegBank.getRegClassForRegister(Reg);
+		assert(rclass && "Has no register class!");
+		Size = rclass->SpillAlignment;
 	}
 	virtual ~ALFConditionFlag() { };
 };
@@ -46,18 +50,18 @@ struct ALFWriter
 	ALFConditionFlag Cflag;
 	ALFConditionFlag Vflag;
 public:
-	ALFWriter() : TheDef(nullptr), Nflag(nullptr), Zflag(nullptr), Cflag(nullptr), Vflag(nullptr)
+	ALFWriter() : TheDef(nullptr)
 	{
 
 	}
 
-	ALFWriter(Record *R) : TheDef(R)
+	ALFWriter(Record *R, CodeGenTarget &target) : TheDef(R)
 	{
 		assert(R && "Record is a nullptr!");
-		Nflag = R->getValueAsDef("Nflag");
-		Zflag = R->getValueAsDef("Zflag");
-		Cflag = R->getValueAsDef("Cflag");
-		Vflag = R->getValueAsDef("Vflag");
+		Nflag = ALFConditionFlag(R->getValueAsDef("Nflag"), target);
+		Zflag = ALFConditionFlag(R->getValueAsDef("Zflag"), target);
+		Cflag = ALFConditionFlag(R->getValueAsDef("Cflag"), target);
+		Vflag = ALFConditionFlag(R->getValueAsDef("Vflag"), target);
 	}
 	virtual ~ALFWriter() { };
 
@@ -283,6 +287,7 @@ public:
 			O << "      SExpr *stor = 0;\n";
 			O << "      op1 = op2 = output = output_carry = 0;\n";
 
+			unsigned bitsize = 0;
 
 			// one argument
 			if (info->hasPattern({"set", "imm"})) {
@@ -304,7 +309,7 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				unsigned bitsize = info->operators[1].bitsize;
+				bitsize = info->operators[1].bitsize;
 
 				O << "      output = ctx->add(" << bitsize <<", op1, op2, 0);\n";
 				O << "      output_carry = ctx->c_add("<<bitsize<<", op1, op2, 0);\n";
@@ -319,7 +324,7 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				unsigned bitsize = info->operators[1].bitsize;
+				bitsize = info->operators[1].bitsize;
 
 				O << "      output = ctx->sub("<<bitsize<<", op1, op2, 1);\n";
 				O << "      output_carry = ctx->c_sub("<<bitsize<<", op1, op2, 1);\n";
@@ -333,7 +338,7 @@ public:
 
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 
-				unsigned bitsize = info->operators[1].bitsize;
+				bitsize = info->operators[1].bitsize;
 
 				O << "      SExpr *load = ctx->load("<<bitsize<<", op1);\n";
 				O << "      stor = ctx->store(ctx->address(targetReg), load);\n";
@@ -348,6 +353,7 @@ public:
 
 				unsigned op1bitsize = info->leafs[1].bitsize;
 				unsigned op2bitsize = info->leafs[2].bitsize;
+				bitsize = op1bitsize; //hm
 
 				O << "      output = ctx->l_shift("<<op1bitsize<<", "<<op1bitsize<<", op1, op2);\n";
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
@@ -362,6 +368,7 @@ public:
 
 				unsigned op1bitsize = info->leafs[1].bitsize;
 				unsigned op2bitsize = info->leafs[2].bitsize;
+				bitsize = op1bitsize; //hm
 
 				O << "      output = ctx->r_shift_a("<<op1bitsize<<", "<<op1bitsize<<", op1, op2);\n";
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
@@ -377,6 +384,7 @@ public:
 				unsigned op1bitsize = info->leafs[1].bitsize;
 				unsigned op2bitsize = info->leafs[2].bitsize;
 				unsigned operatorBitsize = info->operators[1].bitsize;
+				bitsize = operatorBitsize; //hm
 
 				O << "      SExpr *temp = ctx->s_mul("<<op1bitsize<<", "<<op2bitsize<<", op1, op2);\n";
 				O << "      output = ctx->select("<<op1bitsize*op2bitsize<<", 0, "<<operatorBitsize-1<<", temp);\n";
@@ -388,14 +396,14 @@ public:
 				// and assume the second index is registers or immediates
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 
+				bitsize = info->operators[1].bitsize;
+
 				// HACK if there is no 3th argument we asssume this is (set not .. ), or ( set xor .. -1 )
 				if (info->leafs.size() != 3) {
-					O << "      op2 = ctx->dec_signed(32, -1);\n";
+					O << "      op2 = ctx->dec_signed("<<bitsize<<", -1);\n";
 				} else {
 					handleDefaultOperand(O, "op2", info->leafs[2]);
 				}
-
-				unsigned bitsize = info->operators[1].bitsize;
 
 				O << "      output = ctx->xor_("<<bitsize<<", op1, op2);\n";
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
@@ -411,7 +419,7 @@ public:
 				string CarryRegName = writer.Cflag.Reg->getName();
 				unsigned CarryRegsize = writer.Cflag.Size;
 
-				unsigned bitsize = info->operators[1].bitsize;
+				bitsize = info->operators[1].bitsize;
 
 				O << "      SExpr *loadC = ctx->select("<<CarryRegsize<<", " << CarrybitPos <<  ", " << CarrybitPos << ", ctx->load("<<CarryRegsize<<", \"" << CarryRegName << "\"));\n";
 				O << "      output = ctx->add2("<<bitsize<<", op1, op2, loadC);\n";
@@ -427,7 +435,7 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				unsigned bitsize = info->operators[1].bitsize;
+				bitsize = info->operators[1].bitsize;
 
 				O << "      output = ctx->or_("<<bitsize<<", op1, op2);\n";
 
@@ -440,7 +448,7 @@ public:
 				handleDefaultOperand(O, "op1", info->leafs[1]);
 				handleDefaultOperand(O, "op2", info->leafs[2]);
 
-				unsigned bitsize = info->operators[1].bitsize;
+				bitsize = info->operators[1].bitsize;
 
 				O << "      output = ctx->and_("<<bitsize<<", op1, op2);\n";
 
@@ -454,7 +462,7 @@ public:
 			O << "      statement = alfbb.addStatement(label, comment, stor);\n";
 			O << "      SExpr *store_condflags;\n";
 			O << "      if (shouldSetCondFlags(MI)" << ") {\n";
-			O << "        store_condflags = calcNZCV(ctx, op1, op2, output, output_carry);\n";
+			O << "        store_condflags = calcNZCV(ctx, op1, op2, output, output_carry, 32, 32, 32);\n";
 			O << "        if (store_condflags) {\n";
 			O << "          alfbb.addStatement(label + \"_NZCV\", comment, store_condflags);\n";
 			O << "        }\n";
@@ -513,8 +521,6 @@ public:
 		handleDefaultOperand(O, "value", info->leafs[0]);
 
 		handleDefaultOperand(O, "address", info->leafs[1]);
-
-		/* O << "      SExpr *bytes_to_bits = ctx->select(64, 0, 31, ctx->u_mul(32, 32, byteaddress, ctx->dec_unsigned(32, 8)));\n"; */
 
 		O << "      SExpr *stor = ctx->store(address, value);\n";
 		O << "      statement = alfbb.addStatement(label, comment, stor);\n";
@@ -575,7 +581,7 @@ class ALFWriterEmitter {
 
 
 public:
-	ALFWriterEmitter(RecordKeeper &R) : Records(R), Target(R), CGDP(Records), alfwriter(ALFWriter(Target.getALFWriter()))
+	ALFWriterEmitter(RecordKeeper &R) : Records(R), Target(R), CGDP(Records), alfwriter(ALFWriter(Target.getALFWriter(), Target))
 	{
 	}
 
@@ -597,7 +603,8 @@ public:
 		O << 
 			"static SExpr *calcNZCV(ALFContext *ctx,\n"
 			"       SExpr *op1, SExpr *op2,\n"
-			"       SExpr *output, SExpr *output_carry);\n";
+			"       SExpr *output, SExpr *output_carry,\n"
+			"       unsigned op1bitsize, unsigned op2bitsize, unsigned outputbitsize);\n";
 
 		O << "#else\n";
 
@@ -749,23 +756,25 @@ private:
 			"/// from the instruction set description.\n"
 			"static SExpr *calcNZCV(ALFContext *ctx,\n"
 			"       SExpr *op1, SExpr *op2,\n"
-			"       SExpr *output, SExpr *output_carry) {\n"
+			"       SExpr *output, SExpr *output_carry,\n"
+			"       unsigned op1bitsize, unsigned op2bitsize, unsigned outputbitsize) {\n"
 			"  if (output == nullptr)\nreturn nullptr;\n"
 			"  if (ctx == nullptr)\nreturn nullptr;\n";
 
 		string VflagRegName = alfwriter.Vflag.Reg->getName();
 		unsigned VflagBitPos = alfwriter.Vflag.Bitposition;
+		unsigned VflagSize = alfwriter.Vflag.Size;
 
-		O << "  SExpr *V = ctx->select(32, " << VflagBitPos << ", " << VflagBitPos << ", ctx->load(32, \"" << VflagRegName << "\"));\n";
+		O << "  SExpr *V = ctx->select("<<VflagSize<<", " << VflagBitPos << ", " << VflagBitPos << ", ctx->load("<<VflagSize<<", \"" << VflagRegName << "\"));\n";
 		O << "  if (op1 && op2) {\n";
 		// overflow if pos - neg = pos
 		// overflow if neg - pos = neg
-		O << "    SExpr *arg1_pos = ctx->s_ge(32, op1, ctx->dec_unsigned(32, 0));\n";
-		O << "    SExpr *arg2_pos = ctx->s_ge(32, op2, ctx->dec_unsigned(32, 0));\n";
-		O << "    SExpr *output_pos = ctx->s_ge(32, output, ctx->dec_unsigned(32, 0));\n";
-		O << "    SExpr *arg1_neg = ctx->s_lt(32, op1, ctx->dec_unsigned(32, 0));\n";
-		O << "    SExpr *arg2_neg = ctx->s_lt(32, op2, ctx->dec_unsigned(32, 0));\n";
-		O << "    SExpr *output_neg = ctx->s_lt(32, output, ctx->dec_unsigned(32, 0));\n";
+		O << "    SExpr *arg1_pos = ctx->s_ge(op1bitsize, op1, ctx->dec_unsigned(op1bitsize, 0));\n";
+		O << "    SExpr *arg2_pos = ctx->s_ge(op2bitsize, op2, ctx->dec_unsigned(op2bitsize, 0));\n";
+		O << "    SExpr *output_pos = ctx->s_ge(outputbitsize, output, ctx->dec_unsigned(outputbitsize, 0));\n";
+		O << "    SExpr *arg1_neg = ctx->s_lt(op1bitsize, op1, ctx->dec_unsigned(op1bitsize, 0));\n";
+		O << "    SExpr *arg2_neg = ctx->s_lt(op2bitsize, op2, ctx->dec_unsigned(op2bitsize, 0));\n";
+		O << "    SExpr *output_neg = ctx->s_lt(outputbitsize, output, ctx->dec_unsigned(outputbitsize, 0));\n";
 		O << "    V = ctx->or_(1,\n";
 		O << "      ctx->and_(1, ctx->and_(1, arg1_pos, arg2_neg), output_pos),\n";
 		O << "      ctx->and_(1, ctx->and_(1, arg1_neg, arg2_pos), output_neg)\n";
@@ -776,23 +785,41 @@ private:
 		unsigned CflagBitPos = alfwriter.Cflag.Bitposition;
 
 		O << "  if (output_carry == nullptr) {\n";
-		O << "    output_carry = ctx->select(32, " << CflagBitPos << ", " << CflagBitPos << ", ctx->load(32, \"" << CflagRegName << "\"));\n";
+		O << "    output_carry = ctx->select("<<CflagSize<<", " << CflagBitPos << ", " << CflagBitPos << ", ctx->load("<<CflagSize<<", \"" << CflagRegName << "\"));\n";
 		O << "  }\n";
 
-		O << "  SExpr *expr_nzcv = ctx->conc(4, 28, \n";
-		O << "    ctx->conc(2, 2, \n";
-		O << "      ctx->conc(1, 1, \n";
-		O << "        ctx->s_lt(32, output, ctx->dec_unsigned(32, 0)),\n";
-		O << "        ctx->eq(32, output, ctx->dec_unsigned(32, 0))\n";
-		O << "      ),\n";
-		O << "      ctx->conc(1, 1,\n"; 
-		O << "        output_carry,\n";
-		O << "        V\n";
-		O << "        )\n";
-		O << "      ),\n";
-		O << "      ctx->dec_unsigned(28, 0)\n";
-		O << "  );\n";
-		O << "  return ctx->store(ctx->address(\"CPSR\"), expr_nzcv);\n";
+		O << "  SExpr *N = ctx->s_lt(outputbitsize, output, ctx->dec_unsigned(outputbitsize, 0));\n";
+		O << "  SExpr *Z = ctx->eq(outputbitsize, output, ctx->dec_unsigned(outputbitsize, 0));\n";
+
+
+		string NflagRegName = alfwriter.Nflag.Reg->getName();
+		unsigned NflagBitPos = alfwriter.Nflag.Bitposition;
+		unsigned NflagSize = alfwriter.Nflag.Size;
+
+		string ZflagRegName = alfwriter.Zflag.Reg->getName();
+		unsigned ZflagBitPos = alfwriter.Zflag.Bitposition;
+
+		O << "  SExpr *N_addr = ctx->address(\"" << NflagRegName << "\", " << NflagBitPos << ");\n";
+		O << "  SExpr *Z_addr = ctx->address(\"" << ZflagRegName << "\", " << ZflagBitPos << ");\n";
+		O << "  SExpr *C_addr = ctx->address(\"" << CflagRegName << "\", " << CflagBitPos << ");\n";
+		O << "  SExpr *V_addr = ctx->address(\"" << VflagRegName << "\", " << VflagBitPos << ");\n";
+
+		O << "  return ctx->store({ N_addr, Z_addr, C_addr, V_addr }, { N, Z, output_carry, V } );\n";
+
+/* 		O << "  SExpr *expr_nzcv = ctx->conc(4, 28, \n"; */
+/* 		O << "    ctx->conc(2, 2, \n"; */
+/* 		O << "      ctx->conc(1, 1, \n"; */
+/* 		O << "        ,\n"; */
+/* 		O << "        )\n"; */
+/* 		O << "      ),\n"; */
+/* 		O << "      ctx->conc(1, 1,\n"; */ 
+/* 		O << "        output_carry,\n"; */
+/* 		O << "        V\n"; */
+/* 		O << "        )\n"; */
+/* 		O << "      ),\n"; */
+/* 		O << "      ctx->dec_unsigned(28, 0)\n"; */
+/* 		O << "  );\n"; */
+/* 		O << "  return ctx->store(ctx->address(\"CPSR\"), expr_nzcv);\n"; */
 
 		// TODO what flags, what regs
 		// 	==> tablegen
