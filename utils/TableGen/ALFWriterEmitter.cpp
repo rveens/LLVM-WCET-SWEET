@@ -333,14 +333,28 @@ public:
 
 			} else if (info->hasPattern({"set", "ld"})) {
 				// assume the first index is a target register,
-				// and assume the second index is registers or immediates
+				// and assume the second index is a registers
 				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
 
-				handleDefaultOperand(O, "op1", info->leafs[1]);
-
 				bitsize = info->operators[1].bitsize;
+				O << "      SExpr *load;\n";
 
-				O << "      SExpr *load = ctx->load("<<bitsize<<", op1);\n";
+				// loads can have special predicates, such as sign-extended load etc.
+				auto fns = info->operators[1].Operator->getPredicateFns();
+				if (!fns.empty()) {
+					string fnName = fns.back().getFnName();
+					if (fnName == "Predicate_zextloadi8") {
+						O << "      load = ctx->load_zext(8, "<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n";
+					} else if (fnName == "Predicate_zextloadi16") {
+						O << "      load = ctx->load_zext(16, "<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n";
+					} else if (fnName == "Predicate_sextloadi8") {
+						O << "      load = ctx->load_sext(8, "<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n";
+					} else if (fnName == "Predicate_sextloadi16") {
+						O << "      load = ctx->load_sext(16, "<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n";
+					} else {
+						O << "      load = ctx->load("<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n";
+					}
+				}
 				O << "      stor = ctx->store(ctx->address(targetReg), load);\n";
 			} else if (info->hasPattern({"set", "shl"})) {
 				// assume the first index is a target register,
@@ -522,7 +536,24 @@ public:
 
 		handleDefaultOperand(O, "address", info->leafs[1]);
 
-		O << "      SExpr *stor = ctx->store(address, value);\n";
+		O << "      SExpr *valueTrunc;\n";
+
+		unsigned bitsize = info->leafs[1].bitsize;
+
+		// truncated store uses a predicate
+		auto fns = info->operators[0].Operator->getPredicateFns();
+		if (!fns.empty()) {
+			string fnName = fns.back().getFnName();
+			if (fnName == "Predicate_truncstorei8") {
+				O << "      valueTrunc = ctx->select("<<bitsize<<", 0, 7, value);\n";
+			} else if (fnName == "Predicate_truncstorei16") {
+				O << "      valueTrunc = ctx->select("<<bitsize<<", 0, 15, value);\n";
+			} else {
+				O << "      valueTrunc = value;\n";
+			}
+		}
+
+		O << "      SExpr *stor = ctx->store(address, valueTrunc);\n";
 		O << "      statement = alfbb.addStatement(label, comment, stor);\n";
 	}
 
@@ -783,6 +814,7 @@ private:
 
 		string CflagRegName = alfwriter.Cflag.Reg->getName();
 		unsigned CflagBitPos = alfwriter.Cflag.Bitposition;
+		unsigned CflagSize = alfwriter.Cflag.Size;
 
 		O << "  if (output_carry == nullptr) {\n";
 		O << "    output_carry = ctx->select("<<CflagSize<<", " << CflagBitPos << ", " << CflagBitPos << ", ctx->load("<<CflagSize<<", \"" << CflagRegName << "\"));\n";
@@ -805,24 +837,6 @@ private:
 		O << "  SExpr *V_addr = ctx->address(\"" << VflagRegName << "\", " << VflagBitPos << ");\n";
 
 		O << "  return ctx->store({ N_addr, Z_addr, C_addr, V_addr }, { N, Z, output_carry, V } );\n";
-
-/* 		O << "  SExpr *expr_nzcv = ctx->conc(4, 28, \n"; */
-/* 		O << "    ctx->conc(2, 2, \n"; */
-/* 		O << "      ctx->conc(1, 1, \n"; */
-/* 		O << "        ,\n"; */
-/* 		O << "        )\n"; */
-/* 		O << "      ),\n"; */
-/* 		O << "      ctx->conc(1, 1,\n"; */ 
-/* 		O << "        output_carry,\n"; */
-/* 		O << "        V\n"; */
-/* 		O << "        )\n"; */
-/* 		O << "      ),\n"; */
-/* 		O << "      ctx->dec_unsigned(28, 0)\n"; */
-/* 		O << "  );\n"; */
-/* 		O << "  return ctx->store(ctx->address(\"CPSR\"), expr_nzcv);\n"; */
-
-		// TODO what flags, what regs
-		// 	==> tablegen
 
 		O << "}\n\n";
 	}
