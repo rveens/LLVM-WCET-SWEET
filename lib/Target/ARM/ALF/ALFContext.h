@@ -165,6 +165,13 @@ public:
                 ->append(Op1)
                 ->append(Op2);
     }
+    SExpr* r_shift(unsigned BitWidth1, unsigned BitWidth2, SExpr *Op1, SExpr *Op2) {
+        return list("r_shift")
+                ->append(BitWidth1)
+                ->append(BitWidth2)
+                ->append(Op1)
+                ->append(Op2);
+    }
     SExpr* r_shift_a(unsigned BitWidth1, unsigned BitWidth2, SExpr *Op1, SExpr *Op2) {
         return list("r_shift_a")
                 ->append(BitWidth1)

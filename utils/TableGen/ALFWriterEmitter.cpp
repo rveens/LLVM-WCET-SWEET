@@ -371,6 +371,21 @@ public:
 
 				O << "      output = ctx->l_shift("<<op1bitsize<<", "<<op1bitsize<<", op1, op2);\n";
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
+			} else if (info->hasPattern({"set", "srl"})) {
+				// assume the first index is a target register,
+				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
+
+				// and assume the second index is registers or immediates
+				handleDefaultOperand(O, "op1", info->leafs[1]);
+				// and assume the third index is registers or immediates
+				handleDefaultOperand(O, "op2", info->leafs[2]);
+
+				unsigned op1bitsize = info->leafs[1].bitsize;
+				unsigned op2bitsize = info->leafs[2].bitsize;
+				bitsize = op1bitsize; //hm
+
+				O << "      output = ctx->r_shift("<<op1bitsize<<", "<<op1bitsize<<", op1, op2);\n";
+				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "sra"})) {
 				// assume the first index is a target register,
 				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
@@ -495,6 +510,8 @@ public:
 		} else if (info->hasPattern({"set", "ld"})) { 
 			return true;
 		} else if (info->hasPattern({"set", "shl"})) { 
+			return true;
+		} else if (info->hasPattern({"set", "srl"})) { 
 			return true;
 		} else if (info->hasPattern({"set", "sra"}) && info->leafs.size() >= 3) { 
 			return true;
