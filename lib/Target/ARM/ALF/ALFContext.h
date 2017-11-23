@@ -88,6 +88,14 @@ public:
     SExpr* const_repeat(SExpr *Value, uint64_t N) {
         return list("const_repeat")->append(Value)->append(N);
     }
+
+    SExpr* dec_list(unsigned BitWidth, std::vector<uint64_t> N) {
+		auto temp = list("dec_list")->append(BitWidth);
+		for (auto n : N)
+			temp->append(n);
+        return temp;
+    }
+
     /// decimal value
     SExpr* dec_unsigned(unsigned BitWidth, uint64_t Value) {
         return list("dec_unsigned")->append(BitWidth)->append(Value);
@@ -342,6 +350,12 @@ public:
                 ->append(BitWidth2)
                 ->append(Op1)
                 ->append(Op2);
+    }
+    SExprList* sext(unsigned BitWidth1, unsigned BitWidth2, SExpr *op1) {
+        return list("s_ext")
+			->append(BitWidth1)
+			->append(BitWidth2)
+			->append(op1);
     }
     SExpr* select(unsigned BitWidthK, unsigned BitWidthM, unsigned BitWidthN, SExpr *Op1) {
         return list("select")

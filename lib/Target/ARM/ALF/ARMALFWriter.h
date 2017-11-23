@@ -22,7 +22,7 @@ namespace {
 			void regDefALF(ALFBuilder &b);
 		private:
 			void extraFrames(ALFBuilder &b, const MachineConstantPool *MCP);
-			void initFrames(ALFBuilder &b);
+			void initFrames(ALFBuilder &b, MachineFunction &MF);
 			bool shouldSetCondFlags(const MachineInstr &MI);
 			unsigned computeBBcycles(MachineBasicBlock &mbb);
 	};

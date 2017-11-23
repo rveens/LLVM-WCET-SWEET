@@ -4,8 +4,10 @@
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/IR/Module.h"
 
 #include "llvm/CodeGen/MachineConstantPool.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
 #include "ARMConstantPoolValue.h"
 
 
@@ -51,6 +53,26 @@ static SExpr *t_addrmode_rr_customALF(const MachineInstr &MI, ALFStatementGroup 
 
 	SExpr *bytes_to_bits = ctx->select(64, 0, 31, ctx->u_mul(32, 32, ctx->load(32, Reg), ctx->dec_unsigned(32, 8)));
 	SExpr *add = ctx->add(32, bytes_to_bits, offset, 0);
+
+    return ctx->list("addr")->append(32)
+		->append(ctx->fref("mem"))
+		->append(add);
+}
+
+static SExpr *t_addrmode_is2_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* %R0<def> = tLDRHi %R4<kill>, 0, pred:14, pred:%noreg; mem:LD2[getelementptr inbounds ([64 x i16], [64 x i16]* @block, i64 0, i64 0)](align=16)(dereferenceable) dbg:fdtc.c:243:10*/
+
+	// make an ALFAddressExpr* using arguments 1 (R4) and 2 (imm)
+	string SP = TRI->getName(MI.getOperand(1).getReg());
+	auto I = MI.getOperand(2).getImm();
+	// compute offset = I*8
+	SExpr *offset = ctx->dec_unsigned(32, I*8*2);
+	SExpr *Reg_times_8 = ctx->select(64, 0, 31, ctx->u_mul(32, 32, ctx->load(32, SP), ctx->dec_unsigned(32, 8)));
+	SExpr *add = ctx->add(32, Reg_times_8, offset, 0);
 
     return ctx->list("addr")->append(32)
 		->append(ctx->fref("mem"))
@@ -396,9 +418,16 @@ static void tLDRpci_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, 
 	const MachineConstantPool *MCP = MI.getParent()->getParent()->getConstantPool();
 	MachineConstantPoolEntry mcpe = MCP->getConstants()[MI.getOperand(1).getIndex()];
 	const Constant *cv = mcpe.Val.ConstVal;
-	string cpString = "%" + string(cv->getName());
 
-	SExpr *cpVal = ctx->load(32, cpString);
+	SExpr *cpVal;
+	if (cv->getName().empty()) {
+		const APInt &aint = cv->getUniqueInteger();
+		cpVal = ctx->dec_unsigned(32, aint.getZExtValue());
+	} else {
+		string cpString = "%" + string(cv->getName());
+		cpVal = ctx->load(32, cpString);
+	}
+	
 
 	/* SExpr *bytes_to_bits = ctx->select(64, 0, 31, ctx->u_mul(32, 32, cpVal, ctx->dec_unsigned(32, 8))); */
 
@@ -429,14 +458,15 @@ void ARMALFWriter::extraFrames(ALFBuilder &b, const MachineConstantPool *MCP)
 	auto csts = MCP->getConstants();
 	for (MachineConstantPoolEntry mcpe : csts) {
 		const Constant *cv = mcpe.Val.ConstVal;
-		b.addFrame(string("%") + cv->getName(), 32, InternalFrame);
+		if (!cv->getName().empty())
+			b.addFrame(string("%") + cv->getName(), 32, InternalFrame);
 	}
 
 	/* SExpr *stor = ctx->store(ctx->address(target), load); */
 	/* alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor); */
 }
 
-void ARMALFWriter::initFrames(ALFBuilder &b)
+void ARMALFWriter::initFrames(ALFBuilder &b, MachineFunction &MF)
 {
 	b.addInit("APSR_NZCV", 0, b.dec_unsigned(32, 0), false);
 	b.addInit("CPSR", 0, b.dec_unsigned(32, 536871283), false);
@@ -456,6 +486,43 @@ void ARMALFWriter::initFrames(ALFBuilder &b)
 	b.addInit("R10", 0, b.dec_unsigned(32, 0), false);
 	b.addInit("R11", 0, b.dec_unsigned(32, 0), false);
 	b.addInit("R12", 0, b.dec_unsigned(32, 0), false);
+
+
+	// go through global values, if there is a constant try to set initializer
+	// values in the ALF.
+	MachineModuleInfo &mmi = MF.getMMI();
+	const Module *m = mmi.getModule();
+	auto &gvl = m->getGlobalList();
+	for (auto &gv : gvl) {
+		gv.dump();
+		const Constant *c = gv.getInitializer();
+		if (c) {
+			c->dump();
+			// if not array, print value
+			if (c->getAggregateElement(0U) == nullptr) {
+				const APInt &ap1 = c->getUniqueInteger();
+				b.addInit("mem", 0, b.dec_unsigned(ap1.getBitWidth(), ap1.getZExtValue()), false);
+			} else { // else its an array thing, look through elements
+				Constant *c_el;
+				unsigned i = 0;
+				// take bitwidth (assumption: all have the same size)
+				unsigned bitwidth = c->getAggregateElement(0U)->getUniqueInteger().getBitWidth();
+				vector<uint64_t> values;
+				while ( (c_el = c->getAggregateElement(i++)) != nullptr) {
+					c_el->dump();
+					const APInt &ap = c_el->getUniqueInteger();
+					values.push_back(ap.getZExtValue());
+					/* dbgs() << "el waarde: " <<  << "\n"; */
+					/* dbgs() << "el bit-width" << ap.getBitWidth() << "\n"; */
+				}
+				b.addInit("mem", 0, b.dec_list(bitwidth, values), false);
+			}
+		}
+		gv.getType()->getElementType()->dump();
+		/* auto type = gv.getType()->getElementType(); */
+	}
+	/* Constant *c = gv->getInitializer(); */
+	/* c->dump(); */
 }
 
 bool ARMALFWriter::shouldSetCondFlags(const MachineInstr &MI)
@@ -579,7 +646,7 @@ bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
 		b.setLittleEndian(true);
 
 		regDefALF(b); // TableGen
-		initFrames(b);
+		initFrames(b, MF);
 		init = true;
 	}
 	extraFrames(b, MF.getConstantPool());

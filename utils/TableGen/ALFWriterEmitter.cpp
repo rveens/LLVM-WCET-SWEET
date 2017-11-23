@@ -416,7 +416,7 @@ public:
 				bitsize = operatorBitsize; //hm
 
 				O << "      SExpr *temp = ctx->s_mul("<<op1bitsize<<", "<<op2bitsize<<", op1, op2);\n";
-				O << "      output = ctx->select("<<op1bitsize*op2bitsize<<", 0, "<<operatorBitsize-1<<", temp);\n";
+				O << "      output = ctx->select("<<op1bitsize+op2bitsize<<", 0, "<<operatorBitsize-1<<", temp);\n";
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "xor"})) {
 				// assume the first index is a target register,
@@ -482,6 +482,30 @@ public:
 				O << "      output = ctx->and_("<<bitsize<<", op1, op2);\n";
 
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
+			} else if (info->hasPattern({"set", "sext_inreg"})) {
+				// TODO
+				// assume the first index is a register,
+				// and assume the second and third index are registers or immediates
+				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
+
+				handleDefaultOperand(O, "op1", info->leafs[1]);
+
+				bitsize = info->leafs[1].bitsize;
+
+				// try to get the second argument of sext_inreg
+				unsigned truncBitsize = 1;
+				TreePatternNode *ch = info->operators[1].Operator->getChild(1);
+				auto svt = ch->getType(0);
+				if (ch->getLeafValue()->getAsString() == "i16")
+					truncBitsize = 16;
+				else if (ch->getLeafValue()->getAsString() == "i8")
+					truncBitsize = 8;
+
+				O << "      SExpr *sel = ctx->select("<<bitsize<<", 0, "<<(truncBitsize-1)<<", op1);\n";
+
+				O << "      output = ctx->sext("<<truncBitsize<<", "<<bitsize<<", sel);\n";
+
+				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else {
 				O << "      goto default_label;\n";
 			}
@@ -524,6 +548,8 @@ public:
 		} else if (info->hasPattern({"set", "or"})) { 
 			return true;
 		} else if (info->hasPattern({"set", "and"}) && info->leafs.size() >= 3) { 
+			return true;
+		} else if (info->hasPattern({"set", "sext_inreg"})) { 
 			return true;
 		}
 		return false;
