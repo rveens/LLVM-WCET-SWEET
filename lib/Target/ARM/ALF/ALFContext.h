@@ -253,8 +253,19 @@ public:
 		SExpr *tmp = load(BitWidth, Fref);
 		return conc(BitWidthFull-BitWidth, BitWidth, dec_unsigned(BitWidthFull-BitWidth, 0), tmp);
 	}
+	SExpr* load_zext(unsigned BitWidth, unsigned BitWidthFull, SExpr *Fref) {
+		SExpr *tmp = load(BitWidth, Fref);
+		return conc(BitWidthFull-BitWidth, BitWidth, dec_unsigned(BitWidthFull-BitWidth, 0), tmp);
+	}
 
 	SExpr* load_sext(unsigned BitWidth, unsigned BitWidthFull, const Twine& Fref) {
+		SExpr *tmp = load(BitWidth, Fref);
+		return list("s_ext")
+			->append(BitWidth)
+			->append(BitWidthFull)
+			->append(tmp);
+	}
+	SExpr* load_sext(unsigned BitWidth, unsigned BitWidthFull, SExpr *Fref) {
 		SExpr *tmp = load(BitWidth, Fref);
 		return list("s_ext")
 			->append(BitWidth)

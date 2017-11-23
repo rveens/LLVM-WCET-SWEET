@@ -339,22 +339,24 @@ public:
 				bitsize = info->operators[1].bitsize;
 				O << "      SExpr *load;\n";
 
+				O << "      SExpr *addr;\n";
+				// ASSUMPTION: an { addr }  statement is stored in addr
+				handleDefaultOperand(O, "addr", info->leafs[1]);
+
 				// loads can have special predicates, such as sign-extended load etc.
 				auto fns = info->operators[1].Operator->getPredicateFns();
 				if (!fns.empty()) {
 					string fnName = fns.back().getFnName();
 					if (fnName == "Predicate_zextloadi8") {
-						O << "      load = ctx->load_zext(8, "<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n";
+						O << "      load = ctx->load_zext(8, "<<bitsize<<", addr);\n";
 					} else if (fnName == "Predicate_zextloadi16") {
-						O << "      load = ctx->load_zext(16, "<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n";
+						O << "      load = ctx->load_zext(16, "<<bitsize<<", addr);\n";
 					} else if (fnName == "Predicate_sextloadi8") {
-						O << "      load = ctx->load_sext(8, "<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n";
+						O << "      load = ctx->load_sext(8, "<<bitsize<<", addr);\n";
 					} else if (fnName == "Predicate_sextloadi16") {
-						O << "      load = ctx->load_sext(16, "<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n";
+						O << "      load = ctx->load_sext(16, "<<bitsize<<", addr);\n";
 					} else {
 						/* O << "      load = ctx->load("<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n"; */
-						O << "      SExpr *addr;\n";
-						handleDefaultOperand(O, "addr", info->leafs[1]);
 						O << "      load = ctx->load("<<bitsize<<", addr);\n";
 					}
 				}

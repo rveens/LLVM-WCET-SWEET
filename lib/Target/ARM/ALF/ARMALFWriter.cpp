@@ -264,10 +264,15 @@ static void tPOP_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALF
 	/* push {r3} is alias for: */ 
 	/* ldr r3, [sp], #4 */
 	/* tPOP_RET pred:14, pred:%noreg, %R7<def>, %PC<def>, %SP<imp-def>, %SP<imp-use>, %R0<imp-use> */
+	/* tPOP_RET pred:14, pred:%noreg, %R4<def>, %R5<def>, %R6<def>, %R7<def>, %PC<def>, %SP<imp-def>, %SP<imp-use>; dbg:fdtc.c:231:1 */
+
 	// add store statements for each register starting from index 3 until size-3
 
-	for (unsigned i = 2, NumOps = MI.getNumOperands() - 3;
-			i != NumOps; ++i) {
+	const MCInstrDesc &Desc = MI.getDesc();
+    unsigned NumRegs = MI.getNumOperands() - Desc.getNumOperands() + 1;
+
+	for (unsigned i = 2;
+			i < NumRegs; ++i) {
         const MachineOperand &MO = MI.getOperand(i);
 		string MO_name = TRI->getName(MO.getReg());
 
