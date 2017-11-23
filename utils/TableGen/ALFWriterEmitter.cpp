@@ -352,7 +352,10 @@ public:
 					} else if (fnName == "Predicate_sextloadi16") {
 						O << "      load = ctx->load_sext(16, "<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n";
 					} else {
-						O << "      load = ctx->load("<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n";
+						/* O << "      load = ctx->load("<<bitsize<<", TRI->getName(MI.getOperand(1).getReg()));\n"; */
+						O << "      SExpr *addr;\n";
+						handleDefaultOperand(O, "addr", info->leafs[1]);
+						O << "      load = ctx->load("<<bitsize<<", addr);\n";
 					}
 				}
 				O << "      stor = ctx->store(ctx->address(targetReg), load);\n";
