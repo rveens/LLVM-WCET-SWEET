@@ -596,8 +596,13 @@ unsigned ARMALFWriter::computeBBcycles(MachineBasicBlock &mbb)
 		  case ARM::tBIC:
 		  case ARM::tASRri:
 		  case ARM::tMVN:
+		  case ARM::tMUL:
+		  case ARM::tSXTH:
+		  case ARM::tAND:
 			  count += 1;
 			  break;
+		  case ARM::tSTRHr:
+		  case ARM::tSTRHi:
 		  case ARM::tSTRspi:
 		  case ARM::tLDRspi:
 		  case ARM::tLDRBi:
@@ -608,6 +613,8 @@ unsigned ARMALFWriter::computeBBcycles(MachineBasicBlock &mbb)
 		  case ARM::tSTRBr:
 		  case ARM::tLDRi:
 		  case ARM::tLDRr:
+		  case ARM::tLDRSH:
+		  case ARM::tLDRHi:
 			  count += 2;
 			  break;
 		  case ARM::tBcc:

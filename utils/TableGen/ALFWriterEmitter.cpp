@@ -474,6 +474,29 @@ public:
 				O << "      output = ctx->or_("<<bitsize<<", op1, op2);\n";
 
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
+			} else if (info->hasPattern({"set", "and", "xor"})) {
+				// assume the first index is a register,
+				// and assume the second and third index are registers or immediates
+				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
+
+				handleDefaultOperand(O, "op1", info->leafs[1]);
+				O << "      SExpr *op2_t;\n";
+				handleDefaultOperand(O, "op2_t", info->leafs[2]);
+
+				bitsize = info->operators[1].bitsize;
+
+				// HACK if there is no 4th argument we asssume this is (set r1 ( and r2 ( not r3 ) ) ),
+				// which is eq. to  (set r1 ( and r2 ( xor r3 -1 ) ) )
+				// so if there is no 4th leaf we assume there is a -1.
+				if (info->leafs.size() != 4) {
+					O << "      op2 = ctx->xor_("<<bitsize<<", op2_t, ctx->dec_signed("<<bitsize<<", -1));\n";
+				} else {
+					O << "      op2 = op2_t;\n";
+				}
+
+				O << "      output = ctx->and_("<<bitsize<<", op1, op2);\n";
+
+				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "and"})) {
 				// assume the first index is a register,
 				// and assume the second and third index are registers or immediates
@@ -488,7 +511,7 @@ public:
 
 				O << "      stor = ctx->store(ctx->address(targetReg), output);\n";
 			} else if (info->hasPattern({"set", "sext_inreg"})) {
-				// TODO
+				// TODO fix other datatypes
 				// assume the first index is a register,
 				// and assume the second and third index are registers or immediates
 				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
@@ -552,7 +575,9 @@ public:
 			return true;
 		} else if (info->hasPattern({"set", "or"})) { 
 			return true;
-		} else if (info->hasPattern({"set", "and"}) && info->leafs.size() >= 3) { 
+		} else if (info->hasPattern({"set", "and", "xor"}) && info->leafs.size() == 3) { 
+			return true;
+		} else if (info->hasPattern({"set", "and"}) && info->leafs.size() == 3) { 
 			return true;
 		} else if (info->hasPattern({"set", "sext_inreg"})) { 
 			return true;
