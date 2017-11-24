@@ -471,6 +471,30 @@ void ARMALFWriter::extraFrames(ALFBuilder &b, const MachineConstantPool *MCP)
 	/* alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor); */
 }
 
+void loopthroughAggregate(const Constant *c, vector<uint64_t> &values, unsigned &bitwidth)
+{
+	if (c->getAggregateElement(0U) == nullptr) {
+		const APInt &ap1 = c->getUniqueInteger();
+		/* b.addInit("mem", 0, b.dec_unsigned(, ap1.getZExtValue()), false); */
+		values.push_back(ap1.getZExtValue());
+		bitwidth = ap1.getBitWidth();
+	} else { // else its an array thing, look through elements
+		Constant *c_el;
+		unsigned i = 0;
+		// take bitwidth (assumption: all have the same size)
+		/* unsigned bitwidth = c->getAggregateElement(0U)->getUniqueInteger().getBitWidth(); */
+		while ( (c_el = c->getAggregateElement(i++)) != nullptr) {
+			loopthroughAggregate(c_el, values, bitwidth);
+			/* c_el->dump(); */
+			/* const APInt &ap = c_el->getUniqueInteger(); */
+			/* values.push_back(ap.getZExtValue()); */
+			/* dbgs() << "el waarde: " <<  << "\n"; */
+			/* dbgs() << "el bit-width" << ap.getBitWidth() << "\n"; */
+		}
+		/* b.addInit("mem", 0, b.dec_list(bitwidth, values), false); */
+	}
+}
+
 void ARMALFWriter::initFrames(ALFBuilder &b, MachineFunction &MF)
 {
 	b.addInit("APSR_NZCV", 0, b.dec_unsigned(32, 0), false);
@@ -504,24 +528,12 @@ void ARMALFWriter::initFrames(ALFBuilder &b, MachineFunction &MF)
 		if (c) {
 			c->dump();
 			// if not array, print value
-			if (c->getAggregateElement(0U) == nullptr) {
-				const APInt &ap1 = c->getUniqueInteger();
-				b.addInit("mem", 0, b.dec_unsigned(ap1.getBitWidth(), ap1.getZExtValue()), false);
-			} else { // else its an array thing, look through elements
-				Constant *c_el;
-				unsigned i = 0;
-				// take bitwidth (assumption: all have the same size)
-				unsigned bitwidth = c->getAggregateElement(0U)->getUniqueInteger().getBitWidth();
-				vector<uint64_t> values;
-				while ( (c_el = c->getAggregateElement(i++)) != nullptr) {
-					c_el->dump();
-					const APInt &ap = c_el->getUniqueInteger();
-					values.push_back(ap.getZExtValue());
-					/* dbgs() << "el waarde: " <<  << "\n"; */
-					/* dbgs() << "el bit-width" << ap.getBitWidth() << "\n"; */
-				}
+
+			vector<uint64_t> values;
+			unsigned bitwidth = 0;
+			loopthroughAggregate(c, values, bitwidth);
+			if (!values.empty())
 				b.addInit("mem", 0, b.dec_list(bitwidth, values), false);
-			}
 		}
 		gv.getType()->getElementType()->dump();
 		/* auto type = gv.getType()->getElementType(); */
