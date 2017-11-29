@@ -16,7 +16,7 @@
 ;===------------------------------------------------------------------------===;
 
 [common]
-subdirectories = ALF AsmParser Disassembler InstPrinter MCTargetDesc TargetInfo 
+subdirectories =  ALF AsmParser Disassembler InstPrinter MCTargetDesc TargetInfo
 
 [component_0]
 type = TargetGroup

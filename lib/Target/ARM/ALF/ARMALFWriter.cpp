@@ -555,7 +555,6 @@ bool ARMALFWriter::shouldSetCondFlags(const MachineInstr &MI)
 	for (unsigned i = 0; i < MI.getNumOperands(); i++) {
 		if (MI.getOperand(i).isReg() && 
 				TRI->getName(MI.getOperand(i).getReg()) == string("CPSR")) {
-			MI.print(dbgs());
 			setsStatusFlags = true;
 		}
 	}
