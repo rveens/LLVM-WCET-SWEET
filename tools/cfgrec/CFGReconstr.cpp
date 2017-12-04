@@ -7,6 +7,8 @@
 #include <typeinfo>
 #include <algorithm>
 
+#include "llvm/CodeGen/MachineInstrBuilder.h"
+
 bool CFGReconstr::isBranch(LabelledInst &linst)
 {
 	dbgs() << "branch-target is:" << linst.branchTarget << "\n";
@@ -486,6 +488,8 @@ void CFGReconstr::reconstructCFG()
 	/* CFGReconstrStepThree(firstbb, list); */
 	/* list<shared_ptr<MCInstBB>> bblist_bbmerged = CFGMergeBBs(bblist_reconstr); */
 
+	makeMI(bblist_reconstr);
+
 	OutputFileManager OFM;
 	std::shared_ptr<OutputFileInterface> ofd = make_shared<OutputFileDOT>(instPrinter, STI);
 	OFM.addOutput(ofd);
@@ -497,6 +501,7 @@ MachineFunction *CFGReconstr::makeMI(std::list<shared_ptr<MCInstBB>> bblist)
 {
 	LLVMContext ctx;
 	Module m("CFG", ctx);
+	m.setDataLayout(TM.createDataLayout());
 
 	Function *f = Function::Create(FunctionType::get(Type::getVoidTy(ctx), false), GlobalValue::CommonLinkage, "main", &m);
 	if (f) {
@@ -506,12 +511,38 @@ MachineFunction *CFGReconstr::makeMI(std::list<shared_ptr<MCInstBB>> bblist)
 		MachineFunction mf(f, TM, 0, MMI);
 		for (auto bb : bblist) {
 			MachineBasicBlock *mbb = mf.CreateMachineBasicBlock();
+			mf.push_back(mbb);
 			DebugLoc DL;
-			for (auto linst : bb) {
+			bb->mbb = mbb;
+			for (auto linst : *bb) {
 				MCInst &mci = linst.inst;
-				/* MachineInstr *mi = BuildMI(*mbb, DL, MCII->get(mci.GetOpcode())); */
+				MachineInstr *mi = BuildMI(mbb, DL, MCII.get(mci.getOpcode()));
+				// operands
+				for (auto mcop : mci) {
+					if (mcop.isReg()) {
+						mi->addOperand(MachineOperand::CreateReg(mcop.getReg(), false));
+					} else if (mcop.isImm()) {
+						mi->addOperand(MachineOperand::CreateImm(mcop.getImm()));
+					} else if (mcop.isFPImm()) {
+						/* mi->addOperand(MachineOperand::CreateFPImm()); */
+					} else if (mcop.isExpr()) {
+						/* mi->addOperand(MachineOperand::CreateFImm()); */
+					} else if (mcop.isInst()) {
+						/* mi->addOperand(MachineOperand::CreateFImm()); */
+					}
+				}
 			}
 		}
+
+		// loop again over the MBBs to fix the successors/predecessors
+		for (auto bb : bblist) {
+			if (bb->jump)
+				bb->mbb->addSuccessorWithoutProb(bb->jump->mbb);
+			if (bb->fall_through)
+				bb->mbb->addSuccessorWithoutProb(bb->fall_through->mbb);
+		}
+
+		mf.viewCFG();
 	}
 	return nullptr;
 }

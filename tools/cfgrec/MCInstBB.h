@@ -5,6 +5,8 @@
 #include <set>
 #include <memory>
 
+#include "llvm/CodeGen/MachineBasicBlock.h"
+
 #include "LabelledInst.h"
 
 using namespace std;
@@ -18,6 +20,8 @@ struct MCInstBB {
 	shared_ptr<MCInstBB> jump;
 
 	set<shared_ptr<MCInstBB>> incoming;
+
+	MachineBasicBlock *mbb;
 
 	bool isReturn = false;
 	bool isCall = false;
