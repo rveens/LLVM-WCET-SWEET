@@ -12,7 +12,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "llvm-objdump.h"
+#include "cfgrec.h"
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/MathExtras.h"

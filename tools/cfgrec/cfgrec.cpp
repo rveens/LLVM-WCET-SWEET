@@ -16,7 +16,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm-objdump.h"
+#include "cfgrec.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
@@ -64,8 +64,13 @@
 #include <utility>
 #include <unordered_map>
 
+
+#include "llvm/Target/TargetOptions.h"
+#include "llvm/Target/TargetMachine.h"
 #include "LabelledInst.h"
 #include "CFGReconstr.h"
+
+#include "llvm/CodeGen/CommandFlags.h"
 
 using namespace llvm;
 using namespace object;
@@ -124,11 +129,11 @@ cl::opt<std::string>
 llvm::TripleName("triple", cl::desc("Target triple to disassemble for, "
                                     "see -version for available targets"));
 
-cl::opt<std::string>
-llvm::MCPU("mcpu",
-     cl::desc("Target a specific cpu type (-mcpu=help for details)"),
-     cl::value_desc("cpu-name"),
-     cl::init(""));
+/* cl::opt<std::string> */
+/* llvm::MCPU("mcpu", */
+/*      cl::desc("Target a specific cpu type (-mcpu=help for details)"), */
+/*      cl::value_desc("cpu-name"), */
+/*      cl::init("")); */
 
 cl::opt<std::string>
 llvm::ArchName("arch-name", cl::desc("Target arch to disassemble for, "
@@ -151,11 +156,11 @@ cl::alias
 static FilterSectionsj("j", cl::desc("Alias for --section"),
                  cl::aliasopt(llvm::FilterSections));
 
-cl::list<std::string>
-llvm::MAttrs("mattr",
-  cl::CommaSeparated,
-  cl::desc("Target specific attributes"),
-  cl::value_desc("a1,+a2,-a3,..."));
+/* cl::list<std::string> */
+/* llvm::MAttrs("mattr", */
+/*   cl::CommaSeparated, */
+/*   cl::desc("Target specific attributes"), */
+/*   cl::value_desc("a1,+a2,-a3,...")); */
 
 cl::opt<bool>
 llvm::NoShowRawInsn("no-show-raw-insn", cl::desc("When disassembling "
@@ -377,6 +382,7 @@ static const Target *getTarget(const ObjectFile *Obj = nullptr) {
 
   // Get the target specific parser.
   std::string Error;
+
   const Target *TheTarget = TargetRegistry::lookupTarget(ArchName, TheTriple,
                                                          Error);
   if (!TheTarget) {
@@ -1617,7 +1623,17 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
 		  dbgs() << linst.origIndex << "\n";
 		  dbgs() << std::get<2>(i) << "\n";
 	  }
-	  CFGReconstr cfgr(linsts, btargets, *MRI, *IP, *STI, *MIA);
+	  TargetOptions Options = InitTargetOptionsFromCodeGenFlags();
+
+	  std::unique_ptr<const TargetMachine> TM(
+      TheTarget->createTargetMachine(TripleName, MCPU, Features.getString(),
+                                     Options, getRelocModel(), CMModel, CodeGenOpt::Default));
+
+	  if (!TM)
+		  report_error(Obj->getFileName(), "no TM for target " +
+				  TripleName);
+
+	  CFGReconstr cfgr(linsts, btargets, *MRI, *IP, *STI, *MIA, *MII, *TM);
 	  cfgr.reconstructCFG();
 	  // nieuw stukje
     }
@@ -2094,6 +2110,7 @@ int main(int argc, char **argv) {
   llvm_shutdown_obj Y;  // Call llvm_shutdown() on exit.
 
   // Initialize targets and assembly printers/parsers.
+  llvm::InitializeAllTargets();
   llvm::InitializeAllTargetInfos();
   llvm::InitializeAllTargetMCs();
   llvm::InitializeAllDisassemblers();

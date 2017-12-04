@@ -82,6 +82,8 @@ void OutputFileDOT::output(std::list<shared_ptr<MCInstBB>> bblist, std::list<sha
 		for (auto bb : bblist) {
 			if (bb->isUnreachable())
 				make_label(File, bb, "red");
+			else if (bb->isReturn || bb->isCall)
+				make_label(File, bb, "red");
 			else
 				make_label(File, bb, "black");
 			make_arrow(File, bb, bb->jump, "jump");

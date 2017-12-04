@@ -567,11 +567,11 @@ unsigned ARMALFWriter::computeBBcycles(MachineBasicBlock &mbb)
   const InstrItineraryData *ItinData = mbb.getParent()->getSubtarget().getInstrItineraryData();
   unsigned count = 0;
 
-  /* for (MachineInstr &mi : mbb) { */
-	  /* count += TII->getInstrLatency(ItinData, mi); */
-	  /* dbgs() << "cycles van de volgende instructie: " << std::to_string(TII->getInstrLatency(ItinData, mi)); */
-	  /* mi.dump(); */
-  /* } */
+  for (MachineInstr &mi : mbb) {
+	  count += TII->getInstrLatency(ItinData, mi);
+	  dbgs() << "cycles van de volgende instructie: " << std::to_string(TII->getInstrLatency(ItinData, mi));
+	  mi.dump();
+  }
 
   for (MachineInstr &mi : mbb) {
 	  unsigned Opcode = mi.getOpcode();

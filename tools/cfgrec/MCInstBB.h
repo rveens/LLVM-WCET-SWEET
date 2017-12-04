@@ -19,6 +19,9 @@ struct MCInstBB {
 
 	set<shared_ptr<MCInstBB>> incoming;
 
+	bool isReturn = false;
+	bool isCall = false;
+
 	bool isInitialBasicBlock()
 	{
 		if (!Insts.empty()) {

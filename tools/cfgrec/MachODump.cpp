@@ -11,8 +11,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+
 #include "llvm/Object/MachO.h"
-#include "llvm-objdump.h"
+#include "cfgrec.h"
 #include "llvm-c/Disassembler.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
@@ -49,6 +50,7 @@
 #include <cstring>
 #include <system_error>
 
+
 #ifdef HAVE_LIBXAR
 extern "C" {
 #include <xar/xar.h>
@@ -57,6 +59,22 @@ extern "C" {
 
 using namespace llvm;
 using namespace object;
+
+extern cl::opt<std::string> MCPU;
+extern cl::list<std::string> MAttrs;
+
+/* cl::list<std::string> */
+/* llvm::MAttrs("mattr", */
+/*   cl::CommaSeparated, */
+/*   cl::desc("Target specific attributes"), */
+/*   cl::value_desc("a1,+a2,-a3,...")); */
+
+/* cl::opt<std::string> */
+/* llvm::MCPU("mcpu", */
+/*      cl::desc("Target a specific cpu type (-mcpu=help for details)"), */
+/*      cl::value_desc("cpu-name"), */
+/*      cl::init("")); */
+
 
 static cl::opt<bool>
     UseDbg("g",

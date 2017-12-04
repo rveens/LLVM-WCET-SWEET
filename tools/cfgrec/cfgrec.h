@@ -15,6 +15,7 @@
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Object/Archive.h"
 
+
 namespace llvm {
 class StringRef;
 
@@ -29,8 +30,8 @@ namespace object {
 
 extern cl::opt<std::string> TripleName;
 extern cl::opt<std::string> ArchName;
-extern cl::opt<std::string> MCPU;
-extern cl::list<std::string> MAttrs;
+/* extern cl::opt<std::string> MCPU; */
+/* extern cl::list<std::string> MAttrs; */
 extern cl::list<std::string> FilterSections;
 extern cl::opt<bool> Disassemble;
 extern cl::opt<bool> DisassembleAll;

@@ -12,7 +12,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "llvm-objdump.h"
+#include "cfgrec.h"
 #include "llvm/Object/Wasm.h"
 
 using namespace llvm;

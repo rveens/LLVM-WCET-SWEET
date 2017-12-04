@@ -30,6 +30,10 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/Support/FileSystem.h"
 
+#include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
+#include "llvm/Target/TargetMachine.h"
+
 #include <vector>
 #include <list>
 #include <memory>
@@ -48,11 +52,14 @@ private:
 	MCInstPrinter &instPrinter;
 	MCSubtargetInfo const &STI;
 	const MCInstrAnalysis &MIA;
+	const MCInstrInfo &MCII;
+	const TargetMachine &TM;
+
 
 	shared_ptr<MCInstBB> startBB = make_shared<MCInstBB>();
 public:
-	CFGReconstr(vector<LabelledInst> &_ds, vector<unsigned> &_btargets, const MCRegisterInfo &_MRI, MCInstPrinter &_instPrinter, MCSubtargetInfo const &_STI, const MCInstrAnalysis &_MIA)
-		: ds(_ds), btargets(_btargets), MRI(_MRI), instPrinter(_instPrinter), STI(_STI), MIA(_MIA)
+	CFGReconstr(vector<LabelledInst> &_ds, vector<unsigned> &_btargets, const MCRegisterInfo &_MRI, MCInstPrinter &_instPrinter, MCSubtargetInfo const &_STI, const MCInstrAnalysis &_MIA, const MCInstrInfo &_MCII, const TargetMachine &_TM)
+		: ds(_ds), btargets(_btargets), MRI(_MRI), instPrinter(_instPrinter), STI(_STI), MIA(_MIA), MCII(_MCII), TM(_TM)
 	{
 	}
 	virtual ~CFGReconstr() { }
@@ -77,12 +84,15 @@ private:
   // step two fom Cooper article (add branches. do not consider branches in delay slots)
   list<shared_ptr<MCInstBB>> CFGReconstrStepTwo(list<shared_ptr<MCInstBB>> bblist, list<shared_ptr<MCInstBB>> &bblist_unreachable);
 
-  // step three fom Cooper article (consider branches in delay slots)
+  // step three fom Cooper article (consider branches in delay slots) NOT IMPLEMENTED/USED ATM
   void CFGReconstrStepThree(shared_ptr<MCInstBB> firstBB, list<shared_ptr<MCInstBB>> bblist);
   void processBlock(shared_ptr<MCInstBB> block,
 								vector<std::pair<LabelledInst &, unsigned int>> &counterList,
 								list<pair<shared_ptr<MCInstBB>, vector<std::pair<LabelledInst &, unsigned int>>>> &worklist,
 								list<shared_ptr<MCInstBB>> bblist);
+
+  // converting MCInsBB to MachineInstr (machinefunction)
+  MachineFunction *makeMI(std::list<shared_ptr<MCInstBB>> bblist);
 
   list<shared_ptr<MCInstBB>> CFGMergeBBs(list<shared_ptr<MCInstBB>> bblist);
  

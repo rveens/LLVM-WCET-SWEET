@@ -115,6 +115,13 @@ list<shared_ptr<MCInstBB>> CFGReconstr::CFGReconstrStepOne()
 					break; 
 				}
 		}
+		// if the instr is a return, set a flag in the MCInstBB
+		if (MIA.isReturn(inst.inst)) {
+			currBB->isReturn = true;
+		}
+		if (MIA.isCall(inst.inst)) {
+			currBB->isCall = true;
+		}
 		/* if (!inst.label.empty() &&) { */
 		/* } */
 		currBB->Insts.push_back(inst);
@@ -486,6 +493,28 @@ void CFGReconstr::reconstructCFG()
 #undef DEBUG_TYPE
 }
 
+MachineFunction *CFGReconstr::makeMI(std::list<shared_ptr<MCInstBB>> bblist)
+{
+	LLVMContext ctx;
+	Module m("CFG", ctx);
+
+	Function *f = Function::Create(FunctionType::get(Type::getVoidTy(ctx), false), GlobalValue::CommonLinkage, "main", &m);
+	if (f) {
+		/* MachineFunction(const Function *Fn, const TargetMachine &TM, */
+		/*                 unsigned FunctionNum, MachineModuleInfo &MMI); */
+		MachineModuleInfo MMI(&TM);
+		MachineFunction mf(f, TM, 0, MMI);
+		for (auto bb : bblist) {
+			MachineBasicBlock *mbb = mf.CreateMachineBasicBlock();
+			DebugLoc DL;
+			for (auto linst : bb) {
+				MCInst &mci = linst.inst;
+				/* MachineInstr *mi = BuildMI(*mbb, DL, MCII->get(mci.GetOpcode())); */
+			}
+		}
+	}
+	return nullptr;
+}
 
 void CFGReconstr::printLabelledInst(LabelledInst &lInst, bool printlabels, bool printOrigIndex)
 {
@@ -506,6 +535,7 @@ void CFGReconstr::prettyPrintMCInst(MCInst &inst)
 {
 /* #define DEBUG_TYPE "clp-wcet" */
 	instPrinter.printInst(&inst, dbgs(), StringRef(""), STI);
+	dbgs() << "\t(" << MCII.getName(inst.getOpcode()) << ") \n";
 /* #undef DEBUG_TYPE */
 }
 
