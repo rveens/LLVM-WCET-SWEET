@@ -520,7 +520,7 @@ MachineFunction *CFGReconstr::makeMI(std::list<shared_ptr<MCInstBB>> bblist)
 				// operands
 				for (auto mcop : mci) {
 					if (mcop.isReg()) {
-						mi->addOperand(MachineOperand::CreateReg(mcop.getReg(), false));
+						mi->addOperand(MachineOperand::CreateReg(mcop.getReg(), true));
 					} else if (mcop.isImm()) {
 						mi->addOperand(MachineOperand::CreateImm(mcop.getImm()));
 					} else if (mcop.isFPImm()) {
