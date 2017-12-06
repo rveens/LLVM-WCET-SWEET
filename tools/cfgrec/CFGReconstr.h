@@ -43,7 +43,6 @@
 using namespace llvm;
 using namespace std;
 
-
 class CFGReconstr {
 private:
 	vector<LabelledInst> &ds;
@@ -92,7 +91,10 @@ private:
 								list<shared_ptr<MCInstBB>> bblist);
 
   // converting MCInsBB to MachineInstr (machinefunction)
-  MachineFunction *makeMI(std::list<shared_ptr<MCInstBB>> bblist);
+  shared_ptr<MachineFunction> makeMI(std::list<shared_ptr<MCInstBB>> bblist);
+
+  void doARMALFWriter(shared_ptr<MachineFunction> mf);
+
 
   list<shared_ptr<MCInstBB>> CFGMergeBBs(list<shared_ptr<MCInstBB>> bblist);
  

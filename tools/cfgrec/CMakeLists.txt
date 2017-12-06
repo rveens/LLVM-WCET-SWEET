@@ -13,6 +13,7 @@ set(LLVM_LINK_COMPONENTS
   Object
   Support
   Symbolize
+  ARMALFWriter
   )
 
 add_llvm_tool(cfgrec

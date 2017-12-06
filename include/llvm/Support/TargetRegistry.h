@@ -52,6 +52,7 @@ class TargetOptions;
 class raw_ostream;
 class raw_pwrite_stream;
 class formatted_raw_ostream;
+class ALFWriter;
 
 MCStreamer *createNullStreamer(MCContext &Ctx);
 MCStreamer *createAsmStreamer(MCContext &Ctx,
@@ -156,6 +157,8 @@ public:
       LLVMSymbolLookupCallback SymbolLookUp, void *DisInfo, MCContext *Ctx,
       std::unique_ptr<MCRelocationInfo> &&RelInfo);
 
+  typedef ALFWriter *(*ALFWriterCtorTy)();
+
 private:
   /// Next - The next registered target in the linked list, maintained by the
   /// TargetRegistry.
@@ -219,6 +222,7 @@ private:
   /// MCInstPrinter, if registered.
   MCInstPrinterCtorTy MCInstPrinterCtorFn;
 
+
   /// MCCodeEmitterCtorFn - Construction function for this target's
   /// CodeEmitter, if registered.
   MCCodeEmitterCtorTy MCCodeEmitterCtorFn;
@@ -248,12 +252,15 @@ private:
   /// MCSymbolizer, if registered (default = llvm::createMCSymbolizer)
   MCSymbolizerCtorTy MCSymbolizerCtorFn;
 
+  /// Interface for outputing ALF code
+  ALFWriterCtorTy ALFWriterCtorFn;
+
 public:
   Target()
       : COFFStreamerCtorFn(nullptr), MachOStreamerCtorFn(nullptr),
         ELFStreamerCtorFn(nullptr), NullTargetStreamerCtorFn(nullptr),
         AsmTargetStreamerCtorFn(nullptr), ObjectTargetStreamerCtorFn(nullptr),
-        MCRelocationInfoCtorFn(nullptr), MCSymbolizerCtorFn(nullptr) {}
+        MCRelocationInfoCtorFn(nullptr), MCSymbolizerCtorFn(nullptr), ALFWriterCtorFn(nullptr) {}
 
   /// @name Target Information
   /// @{
@@ -397,6 +404,14 @@ public:
     if (!AsmPrinterCtorFn)
       return nullptr;
     return AsmPrinterCtorFn(TM, std::move(Streamer));
+  }
+
+
+  ALFWriter *createALFWriter() const {
+    if (!ALFWriterCtorFn)
+
+      return nullptr;
+    return ALFWriterCtorFn();
   }
 
   MCDisassembler *createMCDisassembler(const MCSubtargetInfo &STI,
@@ -843,6 +858,10 @@ struct TargetRegistry {
     T.MCSymbolizerCtorFn = Fn;
   }
 
+  static void RegisterALFWriter(Target &T, Target::ALFWriterCtorTy Fn) {
+    T.ALFWriterCtorFn = Fn;
+  }
+
   /// @}
 };
 
@@ -1145,6 +1164,17 @@ private:
                                   const MCRegisterInfo & /*MRI*/,
                                   MCContext & /*Ctx*/) {
     return new MCCodeEmitterImpl();
+  }
+};
+
+template <class ALFWriterImpl> struct RegisterALFWriter {
+  RegisterALFWriter(Target &T) {
+    TargetRegistry::RegisterALFWriter(T, &Allocator);
+  }
+
+private:
+  static ALFWriter *Allocator() {
+    return new ALFWriterImpl();
   }
 };
 }

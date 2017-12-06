@@ -1,9 +1,8 @@
 #include "ARMALFWriter.h"
+#include "ARM.h"
 
 #include <string>
 
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/FileSystem.h"
 #include "llvm/IR/Module.h"
 
 #include "llvm/CodeGen/MachineConstantPool.h"
@@ -325,7 +324,9 @@ static void tBcc_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALF
 
 	/* tBcc <BB#3>, pred:11, pred:%CPSR<kill> */
 	// build switch based on predicate
-	auto jumpBB = MI.getOperand(0).getMBB();
+
+	const MachineBasicBlock *jumpBB;
+	jumpBB = MI.getOperand(0).getMBB();
 	string jumpLabel = string(jumpBB->getParent()->getName()) + ":BB#" + std::to_string(jumpBB->getNumber());
 
 	string FTlabelName = "";
@@ -458,13 +459,13 @@ static void tMOVr_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, AL
 #include "ARMGenALFWriter.inc"
 
 
-void ARMALFWriter::extraFrames(ALFBuilder &b, const MachineConstantPool *MCP)
+void ARMALFWriter::extraFrames(const MachineConstantPool *MCP)
 {
 	auto csts = MCP->getConstants();
 	for (MachineConstantPoolEntry mcpe : csts) {
 		const Constant *cv = mcpe.Val.ConstVal;
 		if (!cv->getName().empty())
-			b.addFrame(string("%") + cv->getName(), 32, InternalFrame);
+			b->addFrame(string("%") + cv->getName(), 32, InternalFrame);
 	}
 
 	/* SExpr *stor = ctx->store(ctx->address(target), load); */
@@ -495,49 +496,51 @@ void loopthroughAggregate(const Constant *c, vector<uint64_t> &values, unsigned 
 	}
 }
 
-void ARMALFWriter::initFrames(ALFBuilder &b, MachineFunction &MF)
+void ARMALFWriter::initFrames()
 {
-	b.addInit("APSR_NZCV", 0, b.dec_unsigned(32, 0), false);
-	b.addInit("CPSR", 0, b.dec_unsigned(32, 536871283), false);
-	b.addInit("LR" , 0, b.dec_unsigned(32, 33119), false);
-	b.addInit("PC" , 0, b.dec_unsigned(32, 33232), false);
-	b.addInit("SP" , 0, b.dec_unsigned(32, 134217720), false);
-	b.addInit("R0" , 0, b.dec_unsigned(32, 1), false);
-	b.addInit("R1" , 0, b.dec_unsigned(32, 134217720), false);
-	b.addInit("R2" , 0, b.dec_unsigned(32, 134217720), false);
-	b.addInit("R3" , 0, b.dec_unsigned(32, 0), false);
-	b.addInit("R4" , 0, b.dec_unsigned(32, 1), false);
-	b.addInit("R5" , 0, b.dec_unsigned(32, 134217720), false);
-	b.addInit("R6" , 0, b.dec_unsigned(32, 0), false);
-	b.addInit("R7" , 0, b.dec_unsigned(32, 0), false);
-	b.addInit("R8" , 0, b.dec_unsigned(32, 0), false);
-	b.addInit("R9" , 0, b.dec_unsigned(32, 0), false);
-	b.addInit("R10", 0, b.dec_unsigned(32, 0), false);
-	b.addInit("R11", 0, b.dec_unsigned(32, 0), false);
-	b.addInit("R12", 0, b.dec_unsigned(32, 0), false);
+	b->addInit("APSR_NZCV", 0, b->dec_unsigned(32, 0), false);
+	b->addInit("CPSR", 0, b->dec_unsigned(32, 536871283), false);
+	b->addInit("LR" , 0, b->dec_unsigned(32, 33119), false);
+	b->addInit("PC" , 0, b->dec_unsigned(32, 33232), false);
+	b->addInit("SP" , 0, b->dec_unsigned(32, 134217720), false);
+	b->addInit("R0" , 0, b->dec_unsigned(32, 1), false);
+	b->addInit("R1" , 0, b->dec_unsigned(32, 134217720), false);
+	b->addInit("R2" , 0, b->dec_unsigned(32, 134217720), false);
+	b->addInit("R3" , 0, b->dec_unsigned(32, 0), false);
+	b->addInit("R4" , 0, b->dec_unsigned(32, 1), false);
+	b->addInit("R5" , 0, b->dec_unsigned(32, 134217720), false);
+	b->addInit("R6" , 0, b->dec_unsigned(32, 0), false);
+	b->addInit("R7" , 0, b->dec_unsigned(32, 0), false);
+	b->addInit("R8" , 0, b->dec_unsigned(32, 0), false);
+	b->addInit("R9" , 0, b->dec_unsigned(32, 0), false);
+	b->addInit("R10", 0, b->dec_unsigned(32, 0), false);
+	b->addInit("R11", 0, b->dec_unsigned(32, 0), false);
+	b->addInit("R12", 0, b->dec_unsigned(32, 0), false);
 
 
 	// go through global values, if there is a constant try to set initializer
 	// values in the ALF.
-	MachineModuleInfo &mmi = MF.getMMI();
-	const Module *m = mmi.getModule();
-	auto &gvl = m->getGlobalList();
-	for (auto &gv : gvl) {
-		gv.dump();
-		const Constant *c = gv.getInitializer();
-		if (c) {
-			c->dump();
-			// if not array, print value
+	/* MachineModuleInfo &mmi = MF.getMMI(); */
+	/* const Module *m = mmi.getModule(); */
+	/* auto &gvl = m->getGlobalList(); */
+	/* for (auto &gv : gvl) { */
+		/* if (!gv.hasInitializer()) */
+		/* 	continue; */
+		/* gv.dump(); */
+		/* const Constant *c = gv.getInitializer(); */
+		/* if (c) { */
+		/* 	c->dump(); */
+		/* 	// if not array, print value */
 
-			vector<uint64_t> values;
-			unsigned bitwidth = 0;
-			loopthroughAggregate(c, values, bitwidth);
-			if (!values.empty())
-				b.addInit("mem", 0, b.dec_list(bitwidth, values), false);
-		}
-		gv.getType()->getElementType()->dump();
+		/* 	vector<uint64_t> values; */
+		/* 	unsigned bitwidth = 0; */
+		/* 	loopthroughAggregate(c, values, bitwidth); */
+		/* 	if (!values.empty()) */
+		/* 		b.addInit("mem", 0, b.dec_list(bitwidth, values), false); */
+		/* } */
+		/* gv.getType()->getElementType()->dump(); */
 		/* auto type = gv.getType()->getElementType(); */
-	}
+	/* } */
 	/* Constant *c = gv->getInitializer(); */
 	/* c->dump(); */
 }
@@ -647,67 +650,6 @@ unsigned ARMALFWriter::computeBBcycles(MachineBasicBlock &mbb)
 	  }
   }
   return count;
-}
-
-bool ARMALFWriter::runOnMachineFunction(MachineFunction &MF)
-{
-	// ALF code for sweet
-	std::string Filename = "arm.alf";
-
-	std::error_code EC;
-	raw_fd_ostream File(Filename, EC, sys::fs::F_Text);
-
-	if (EC)
-		return false;
-
-	static ALFOutput o(File, 1);
-	static ALFBuilder b(o);
-
-	static bool init = false;
-	if (!init) {
-		b.setBitWidths(32, 32, 32);
-		b.setLittleEndian(true);
-
-		regDefALF(b); // TableGen
-		initFrames(b, MF);
-		init = true;
-	}
-	extraFrames(b, MF.getConstantPool());
-
-	vector<pair<string, unsigned>> BasicBlockCycles;
-
-	auto alffunc = b.addFunction(MF.getName(), MF.getName(), "dit is een test");
-	assert(alffunc && "Error creating ALF function!");
-
-	for (MachineBasicBlock &mbb : MF) {
-		unsigned instrCounter = 0;
-		string BBname = string(MF.getName()) + ":BB#" + std::to_string(mbb.getNumber());
-		auto alfbb = alffunc->addBasicBlock(BBname, BBname);
-		for (MachineInstr &mi : mbb) {
-			if (mi.isCFIInstruction())
-				continue;
-			string labelName = BBname + ":" + std::to_string(instrCounter);
-			printInstructionALF(mi, *alfbb, alffunc, labelName); // TableGen
-			instrCounter++;
-		}
-		unsigned cycleCount = computeBBcycles(mbb);
-		BasicBlockCycles.push_back({BBname, cycleCount});
-	}
-
-	b.writeToFile(o);
-
-	// cycle count per basic block for SWEET
-	std::string Filename2 = "arm.tdb";
-
-	std::error_code EC2;
-	raw_fd_ostream File2(Filename2, EC2, sys::fs::F_Append);
-
-	if (EC2)
-		return false;
-
-	for (auto pr : BasicBlockCycles) {
-		File2 << std::get<0>(pr) << " " << std::get<1>(pr) << "\n";
-	}
 }
 
 FunctionPass *llvm::createARMALFWriterPass() {

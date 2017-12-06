@@ -9,6 +9,9 @@
 
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 
+// bleh
+#include "../../lib/Target/ARM/ALF/ARMALFWriter.h"
+
 bool CFGReconstr::isBranch(LabelledInst &linst)
 {
 	dbgs() << "branch-target is:" << linst.branchTarget << "\n";
@@ -488,7 +491,8 @@ void CFGReconstr::reconstructCFG()
 	/* CFGReconstrStepThree(firstbb, list); */
 	/* list<shared_ptr<MCInstBB>> bblist_bbmerged = CFGMergeBBs(bblist_reconstr); */
 
-	makeMI(bblist_reconstr);
+	shared_ptr<MachineFunction> mf = makeMI(bblist_reconstr);
+	doARMALFWriter(mf);
 
 	OutputFileManager OFM;
 	std::shared_ptr<OutputFileInterface> ofd = make_shared<OutputFileDOT>(instPrinter, STI);
@@ -497,7 +501,7 @@ void CFGReconstr::reconstructCFG()
 #undef DEBUG_TYPE
 }
 
-MachineFunction *CFGReconstr::makeMI(std::list<shared_ptr<MCInstBB>> bblist)
+shared_ptr<MachineFunction> CFGReconstr::makeMI(std::list<shared_ptr<MCInstBB>> bblist)
 {
 	LLVMContext ctx;
 	Module m("CFG", ctx);
@@ -508,10 +512,10 @@ MachineFunction *CFGReconstr::makeMI(std::list<shared_ptr<MCInstBB>> bblist)
 		/* MachineFunction(const Function *Fn, const TargetMachine &TM, */
 		/*                 unsigned FunctionNum, MachineModuleInfo &MMI); */
 		MachineModuleInfo MMI(&TM);
-		MachineFunction mf(f, TM, 0, MMI);
+		shared_ptr<MachineFunction> mf = make_shared<MachineFunction>(f, TM, 0, MMI);
 		for (auto bb : bblist) {
-			MachineBasicBlock *mbb = mf.CreateMachineBasicBlock();
-			mf.push_back(mbb);
+			MachineBasicBlock *mbb = mf->CreateMachineBasicBlock();
+			mf->push_back(mbb);
 			DebugLoc DL;
 			bb->mbb = mbb;
 			for (auto linst : *bb) {
@@ -541,10 +545,28 @@ MachineFunction *CFGReconstr::makeMI(std::list<shared_ptr<MCInstBB>> bblist)
 			if (bb->fall_through)
 				bb->mbb->addSuccessorWithoutProb(bb->fall_through->mbb);
 		}
-
-		mf.viewCFG();
+		mf->dump();
+		return mf;
 	}
 	return nullptr;
+}
+
+void CFGReconstr::doARMALFWriter(shared_ptr<MachineFunction> mf)
+{
+	/* for (auto mbb : *mf) */
+	/* 	for (auto mi : mbb) { */
+			/* switch (mi.getOpcode()) { */
+			/* 	/1* case ARM::tBX: *1/ */
+			/* 		/1* break; *1/ */
+			/* } */
+		/* } */
+	// fix 'tBX lr' back to tBX_RET
+
+
+	if (mf) {
+		ARMALFWriter aaw;
+		aaw.runOnMachineFunction(*mf);
+	}
 }
 
 void CFGReconstr::printLabelledInst(LabelledInst &lInst, bool printlabels, bool printOrigIndex)

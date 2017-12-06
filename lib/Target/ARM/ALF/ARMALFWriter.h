@@ -1,32 +1,32 @@
 #ifndef LLVM_LIB_TARGET_ARM_ALF_ARMALFWRITER_H
 #define LLVM_LIB_TARGET_ARM_ALF_ARMALFWRITER_H
 
-#include "ARM.h"
-#include "ALFBuilder.h"
+#include "llvm/ALF/ALFWriter.h"
 
 using namespace llvm;
 using namespace alf;
 
-namespace {
+/* namespace llvm { */
 
-	class ARMALFWriter : public MachineFunctionPass {
+	class ARMALFWriter : public ALFWriter {
 		public:
-			static char ID;
-
-			ARMALFWriter() : MachineFunctionPass(ID) {  }
-
-			bool runOnMachineFunction(MachineFunction &MF) override;
+			ARMALFWriter() : ALFWriter("arm.alf")
+			{
+				regDefALF(*b); // TableGen
+				initFrames();
+			}
+			virtual ~ARMALFWriter() { }
 
 			// Table'gen'd
-			void printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label);
-			void regDefALF(ALFBuilder &b);
+			virtual void printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label) override;
+			virtual void regDefALF(ALFBuilder &b) override;
 		private:
-			void extraFrames(ALFBuilder &b, const MachineConstantPool *MCP);
-			void initFrames(ALFBuilder &b, MachineFunction &MF);
-			bool shouldSetCondFlags(const MachineInstr &MI);
-			unsigned computeBBcycles(MachineBasicBlock &mbb);
+			virtual void initFrames() override;
+			void extraFrames(const MachineConstantPool *MCP);
+			virtual unsigned computeBBcycles(MachineBasicBlock &mbb) override;
+			virtual bool shouldSetCondFlags(const MachineInstr &MI) override;
 	};
-	char ARMALFWriter::ID = 0;
-}
+	/* char ARMALFWriter::ID = 0; */
+/* } */
 
 #endif

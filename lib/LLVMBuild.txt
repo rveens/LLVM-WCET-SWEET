@@ -17,6 +17,7 @@
 
 [common]
 subdirectories =
+ ALF
  Analysis
  AsmParser
  Bitcode

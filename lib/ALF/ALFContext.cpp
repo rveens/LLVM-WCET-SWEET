@@ -10,7 +10,7 @@
 #include <sstream>
 #include <llvm/ADT/Twine.h>
 
-#include "ALFContext.h"
+#include "llvm/ALF/ALFContext.h"
 
 namespace alf {
 

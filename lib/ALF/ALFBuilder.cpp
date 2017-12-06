@@ -13,7 +13,7 @@
 #include <llvm/ADT/StringExtras.h>
 #include "llvm/Support/FileSystem.h"
 
-#include "ALFBuilder.h"
+#include "llvm/ALF/ALFBuilder.h"
 
 using namespace llvm;
 
