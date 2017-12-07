@@ -3,6 +3,7 @@
 
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/ALF/ALFBuilder.h"
+#include "llvm/ALF/MCInstBB.h"
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/FileSystem.h"
@@ -29,12 +30,16 @@ namespace llvm {
 		virtual unsigned computeBBcycles(MachineBasicBlock &mbb) = 0;
 		virtual bool shouldSetCondFlags(const MachineInstr &MI) = 0;
 
+		virtual void HigherMCInstToMachineInstr(shared_ptr<MCInstBB> bb, MachineBasicBlock *mbb, MCInst &mc) { };
+
 		// expected from tablegen
 		virtual void printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label) = 0;
 		virtual void regDefALF(ALFBuilder &b) = 0;
 
 	private:
 		char ID = 0;
+		shared_ptr<raw_fd_ostream> File;
+
 		string makeBBALFname(MachineFunction &MF, MachineBasicBlock &mbb);
 	};
 

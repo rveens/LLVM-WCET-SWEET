@@ -13,7 +13,7 @@
 #ifndef TARGET_CLP_CLPWCET_DUMMYMCSTREAMER_H
 #define TARGET_CLP_CLPWCET_DUMMYMCSTREAMER_H
 
-#include "LabelledInst.h"
+#include "llvm/ALF/LabelledInst.h"
 
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/Support/Debug.h"

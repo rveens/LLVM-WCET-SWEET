@@ -26,6 +26,8 @@
 #include "llvm/Support/TargetParser.h"
 #include "llvm/Support/TargetRegistry.h"
 
+#include "ALF/ARMALFWriter.h"
+
 using namespace llvm;
 
 #define GET_REGINFO_MC_DESC
@@ -272,6 +274,10 @@ static MCInstrAnalysis *createARMMCInstrAnalysis(const MCInstrInfo *Info) {
   return new ARMMCInstrAnalysis(Info);
 }
 
+static ALFWriter *createALFWriter(const MCInstrInfo *mii, const MCRegisterInfo *mri) {
+	return new ARMALFWriter(mii, mri);
+}
+
 // Force static initialization.
 extern "C" void LLVMInitializeARMTargetMC() {
   for (Target *T : {&getTheARMLETarget(), &getTheARMBETarget(),
@@ -328,4 +334,8 @@ extern "C" void LLVMInitializeARMTargetMC() {
                                        createThumbLEAsmBackend);
   TargetRegistry::RegisterMCAsmBackend(getTheThumbBETarget(),
                                        createThumbBEAsmBackend);
+
+  // register alfwriter
+  TargetRegistry::RegisterALFWriter(getTheThumbLETarget(),
+                                       createALFWriter);
 }

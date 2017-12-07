@@ -4,7 +4,7 @@
 #include <memory>
 #include <list>
 
-#include "MCInstBB.h"
+#include "llvm/ALF/MCInstBB.h"
 
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCInstrInfo.h"

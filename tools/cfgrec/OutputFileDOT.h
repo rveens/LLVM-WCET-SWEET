@@ -8,7 +8,7 @@
 #include "llvm/Support/Debug.h"
 
 #include "OutputFileInterface.h"
-#include "MCInstBB.h"
+#include "llvm/ALF/MCInstBB.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCCodeEmitter.h"
 

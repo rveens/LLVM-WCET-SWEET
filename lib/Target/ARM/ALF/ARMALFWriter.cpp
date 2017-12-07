@@ -7,10 +7,10 @@
 
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
+
 #include "ARMConstantPoolValue.h"
-
-
 #include "../MCTargetDesc/ARMBaseInfo.h"
+
 
 #define GET_ALF_HEADERS
 #include "ARMGenALFWriter.inc"
@@ -496,6 +496,46 @@ void loopthroughAggregate(const Constant *c, vector<uint64_t> &values, unsigned 
 	}
 }
 
+void ARMALFWriter::HigherMCInstToMachineInstr(shared_ptr<MCInstBB> bb, MachineBasicBlock *mbb, MCInst &mc)
+{
+	if (!MRI || !MII)
+		return;
+
+	unsigned opcodeToChoose = mc.getOpcode();
+
+	// fix 'bx rl' to be tBX_RET instead of tBX
+	if (mc.getOpcode() == ARM::tBX) {
+		for (unsigned i = 0; i < mc.getNumOperands(); i++) { 
+			auto &mco = mc.getOperand(i);
+			if (mco.isReg() && MRI->getName(mco.getReg()) == "LR") {
+				opcodeToChoose = ARM::tBX_RET;
+			}
+		}
+	}
+
+	DebugLoc DL;
+	MachineInstr *mi = BuildMI(mbb, DL, MII->get(opcodeToChoose));
+	// operands
+	for (unsigned i = 0; i < mc.getNumOperands(); i++) {
+		auto mcop = mc.getOperand(i);
+		if (mcop.isReg()) {
+			mi->addOperand(MachineOperand::CreateReg(mcop.getReg(), true));
+		} else if (mcop.isImm()) {
+			// if tBcc add a ref to the jump on the first machineop
+			if (i == 0 && mc.getOpcode() == ARM::tBcc) {
+				mi->addOperand(MachineOperand::CreateMBB(bb->jump->mbb));
+			} else
+				mi->addOperand(MachineOperand::CreateImm(mcop.getImm()));
+		} else if (mcop.isFPImm()) {
+			/* mi->addOperand(MachineOperand::CreateFPImm()); */
+		} else if (mcop.isExpr()) {
+			/* mi->addOperand(MachineOperand::CreateFImm()); */
+		} else if (mcop.isInst()) {
+			/* mi->addOperand(MachineOperand::CreateFImm()); */
+		}
+	}
+}
+
 void ARMALFWriter::initFrames()
 {
 	b->addInit("APSR_NZCV", 0, b->dec_unsigned(32, 0), false);
@@ -653,5 +693,5 @@ unsigned ARMALFWriter::computeBBcycles(MachineBasicBlock &mbb)
 }
 
 FunctionPass *llvm::createARMALFWriterPass() {
-	return new ARMALFWriter();
+	return new ARMALFWriter(nullptr, nullptr);
 }

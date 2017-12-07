@@ -17,8 +17,8 @@
 #define LIB_TARGET_CLP_CLPWCET_CFGRECONSTR_H
 
 #include "DummyMCStreamer.h"
-#include "LabelledInst.h"
-#include "MCInstBB.h"
+#include "llvm/ALF/LabelledInst.h"
+#include "llvm/ALF/MCInstBB.h"
 #include "OutputFileManager.h"
 #include "OutputFileDOT.h"
 #include "llvm/MC/MCInstPrinter.h"
@@ -33,6 +33,7 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/ALF/ALFWriter.h"
 
 #include <vector>
 #include <list>
@@ -53,12 +54,13 @@ private:
 	const MCInstrAnalysis &MIA;
 	const MCInstrInfo &MCII;
 	const TargetMachine &TM;
+	ALFWriter *AW;
 
 
 	shared_ptr<MCInstBB> startBB = make_shared<MCInstBB>();
 public:
-	CFGReconstr(vector<LabelledInst> &_ds, vector<unsigned> &_btargets, const MCRegisterInfo &_MRI, MCInstPrinter &_instPrinter, MCSubtargetInfo const &_STI, const MCInstrAnalysis &_MIA, const MCInstrInfo &_MCII, const TargetMachine &_TM)
-		: ds(_ds), btargets(_btargets), MRI(_MRI), instPrinter(_instPrinter), STI(_STI), MIA(_MIA), MCII(_MCII), TM(_TM)
+	CFGReconstr(vector<LabelledInst> &_ds, vector<unsigned> &_btargets, const MCRegisterInfo &_MRI, MCInstPrinter &_instPrinter, MCSubtargetInfo const &_STI, const MCInstrAnalysis &_MIA, const MCInstrInfo &_MCII, const TargetMachine &_TM, ALFWriter *_AW)
+		: ds(_ds), btargets(_btargets), MRI(_MRI), instPrinter(_instPrinter), STI(_STI), MIA(_MIA), MCII(_MCII), TM(_TM), AW(_AW)
 	{
 	}
 	virtual ~CFGReconstr() { }

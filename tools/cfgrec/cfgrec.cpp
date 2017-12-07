@@ -67,10 +67,12 @@
 
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Target/TargetMachine.h"
-#include "LabelledInst.h"
+#include "llvm/ALF/LabelledInst.h"
 #include "CFGReconstr.h"
 
 #include "llvm/CodeGen/CommandFlags.h"
+
+#include "llvm/ALF/ALFWriter.h"
 
 using namespace llvm;
 using namespace object;
@@ -1633,7 +1635,9 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
 		  report_error(Obj->getFileName(), "no TM for target " +
 				  TripleName);
 
-	  CFGReconstr cfgr(linsts, btargets, *MRI, *IP, *STI, *MIA, *MII, *TM);
+	  ALFWriter *alfw = TheTarget->createALFWriter(MII.get(), MRI.get());
+
+	  CFGReconstr cfgr(linsts, btargets, *MRI, *IP, *STI, *MIA, *MII, *TM, alfw);
 	  cfgr.reconstructCFG();
 	  // nieuw stukje
     }

@@ -157,7 +157,7 @@ public:
       LLVMSymbolLookupCallback SymbolLookUp, void *DisInfo, MCContext *Ctx,
       std::unique_ptr<MCRelocationInfo> &&RelInfo);
 
-  typedef ALFWriter *(*ALFWriterCtorTy)();
+  typedef ALFWriter *(*ALFWriterCtorTy)(const MCInstrInfo *mii, const MCRegisterInfo *mri);
 
 private:
   /// Next - The next registered target in the linked list, maintained by the
@@ -407,11 +407,11 @@ public:
   }
 
 
-  ALFWriter *createALFWriter() const {
+  ALFWriter *createALFWriter( const MCInstrInfo *mii,
+							  const MCRegisterInfo *mri) const {
     if (!ALFWriterCtorFn)
-
       return nullptr;
-    return ALFWriterCtorFn();
+    return ALFWriterCtorFn(mii, mri);
   }
 
   MCDisassembler *createMCDisassembler(const MCSubtargetInfo &STI,

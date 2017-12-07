@@ -509,33 +509,12 @@ shared_ptr<MachineFunction> CFGReconstr::makeMI(std::list<shared_ptr<MCInstBB>> 
 
 	Function *f = Function::Create(FunctionType::get(Type::getVoidTy(ctx), false), GlobalValue::CommonLinkage, "main", &m);
 	if (f) {
-		/* MachineFunction(const Function *Fn, const TargetMachine &TM, */
-		/*                 unsigned FunctionNum, MachineModuleInfo &MMI); */
 		MachineModuleInfo MMI(&TM);
 		shared_ptr<MachineFunction> mf = make_shared<MachineFunction>(f, TM, 0, MMI);
 		for (auto bb : bblist) {
 			MachineBasicBlock *mbb = mf->CreateMachineBasicBlock();
 			mf->push_back(mbb);
-			DebugLoc DL;
 			bb->mbb = mbb;
-			for (auto linst : *bb) {
-				MCInst &mci = linst.inst;
-				MachineInstr *mi = BuildMI(mbb, DL, MCII.get(mci.getOpcode()));
-				// operands
-				for (auto mcop : mci) {
-					if (mcop.isReg()) {
-						mi->addOperand(MachineOperand::CreateReg(mcop.getReg(), true));
-					} else if (mcop.isImm()) {
-						mi->addOperand(MachineOperand::CreateImm(mcop.getImm()));
-					} else if (mcop.isFPImm()) {
-						/* mi->addOperand(MachineOperand::CreateFPImm()); */
-					} else if (mcop.isExpr()) {
-						/* mi->addOperand(MachineOperand::CreateFImm()); */
-					} else if (mcop.isInst()) {
-						/* mi->addOperand(MachineOperand::CreateFImm()); */
-					}
-				}
-			}
 		}
 
 		// loop again over the MBBs to fix the successors/predecessors
@@ -544,6 +523,15 @@ shared_ptr<MachineFunction> CFGReconstr::makeMI(std::list<shared_ptr<MCInstBB>> 
 				bb->mbb->addSuccessorWithoutProb(bb->jump->mbb);
 			if (bb->fall_through)
 				bb->mbb->addSuccessorWithoutProb(bb->fall_through->mbb);
+
+			// now we add the operands (bb->mbb was needed)
+			for (auto linst : *bb) {
+				MCInst &mci = linst.inst;
+				// do target-dependant fixup
+				if (AW) {
+					AW->HigherMCInstToMachineInstr(bb, bb->mbb, mci);
+				}
+			}
 		}
 		mf->dump();
 		return mf;

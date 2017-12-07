@@ -4,9 +4,9 @@ ALFWriter::ALFWriter(string Filename) :
 	o(nullptr), b(nullptr), MachineFunctionPass(ID) 
 {
 	std::error_code EC;
-	raw_fd_ostream File(Filename, EC, sys::fs::F_Text);
+	File = make_shared<raw_fd_ostream>(Filename, EC, sys::fs::F_Text);
 
-	o = make_shared<ALFOutput>(File, 1);
+	o = make_shared<ALFOutput>(*File, 1);
 	b = make_shared<ALFBuilder>(*o);
 
 	b->setBitWidths(32, 32, 32);
