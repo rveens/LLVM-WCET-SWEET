@@ -93,7 +93,7 @@ private:
 								list<shared_ptr<MCInstBB>> bblist);
 
   // converting MCInsBB to MachineInstr (machinefunction)
-  shared_ptr<MachineFunction> makeMI(std::list<shared_ptr<MCInstBB>> bblist);
+  shared_ptr<MachineFunction> makeMI(Function *f, std::list<shared_ptr<MCInstBB>> bblist);
 
   void doARMALFWriter(shared_ptr<MachineFunction> mf);
 

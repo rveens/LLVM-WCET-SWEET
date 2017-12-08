@@ -491,7 +491,12 @@ void CFGReconstr::reconstructCFG()
 	/* CFGReconstrStepThree(firstbb, list); */
 	/* list<shared_ptr<MCInstBB>> bblist_bbmerged = CFGMergeBBs(bblist_reconstr); */
 
-	shared_ptr<MachineFunction> mf = makeMI(bblist_reconstr);
+	LLVMContext ctx;
+	Module m("CFG", ctx);
+	m.setDataLayout(TM.createDataLayout());
+	Function *f = Function::Create(FunctionType::get(Type::getVoidTy(ctx), false), GlobalValue::CommonLinkage, "main", &m);
+
+	shared_ptr<MachineFunction> mf = makeMI(f, bblist_reconstr);
 	doARMALFWriter(mf);
 
 	OutputFileManager OFM;
@@ -501,13 +506,8 @@ void CFGReconstr::reconstructCFG()
 #undef DEBUG_TYPE
 }
 
-shared_ptr<MachineFunction> CFGReconstr::makeMI(std::list<shared_ptr<MCInstBB>> bblist)
+shared_ptr<MachineFunction> CFGReconstr::makeMI(Function *f, std::list<shared_ptr<MCInstBB>> bblist)
 {
-	LLVMContext ctx;
-	Module m("CFG", ctx);
-	m.setDataLayout(TM.createDataLayout());
-
-	Function *f = Function::Create(FunctionType::get(Type::getVoidTy(ctx), false), GlobalValue::CommonLinkage, "main", &m);
 	if (f) {
 		MachineModuleInfo MMI(&TM);
 		shared_ptr<MachineFunction> mf = make_shared<MachineFunction>(f, TM, 0, MMI);
