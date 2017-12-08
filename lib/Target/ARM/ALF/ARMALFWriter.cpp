@@ -523,8 +523,8 @@ void ARMALFWriter::HigherMCInstToMachineInstr(shared_ptr<MCInstBB> bb, MachineBa
 		if (mcop.isReg()) {
 			mi->addOperand(MachineOperand::CreateReg(mcop.getReg(), true));
 		} else if (mcop.isImm()) {
-			// if tBcc add a ref to the jump on the first machineop
-			if (i == 0 && mc.getOpcode() == ARM::tBcc) {
+			// if tBcc or tB add a ref to the jump on the first machineop
+			if (i == 0 && (mc.getOpcode() == ARM::tBcc || mc.getOpcode() == ARM::tB) ) {
 				mi->addOperand(MachineOperand::CreateMBB(bb->jump->mbb));
 			} else
 				mi->addOperand(MachineOperand::CreateImm(mcop.getImm()));
