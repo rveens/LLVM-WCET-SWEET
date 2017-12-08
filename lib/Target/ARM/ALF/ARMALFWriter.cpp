@@ -501,20 +501,22 @@ void ARMALFWriter::HigherMCInstToMachineInstr(shared_ptr<MCInstBB> bb, MachineBa
 	if (!MRI || !MII)
 		return;
 
-	unsigned opcodeToChoose = mc.getOpcode();
+	DebugLoc DL;
 
 	// fix 'bx rl' to be tBX_RET instead of tBX
 	if (mc.getOpcode() == ARM::tBX) {
 		for (unsigned i = 0; i < mc.getNumOperands(); i++) { 
 			auto &mco = mc.getOperand(i);
-			if (mco.isReg() && MRI->getName(mco.getReg()) == "LR") {
-				opcodeToChoose = ARM::tBX_RET;
+			if (mco.isReg() && MRI->getName(mco.getReg()) == string("LR")) {
+				// set arguments according to tBX_RET instead of tBX or else we get errors
+				/* tBX_RET pred:14, pred:%noreg, %R0<imp-use>; dbg:main.c:18:3 */
+				AddDefaultPred(BuildMI(*mbb, mbb->end(), DL, MII->get(ARM::tBX_RET)));
+				return;
 			}
 		}
 	}
 
-	DebugLoc DL;
-	MachineInstr *mi = BuildMI(mbb, DL, MII->get(opcodeToChoose));
+	MachineInstr *mi = BuildMI(mbb, DL, MII->get(mc.getOpcode()));
 	// operands
 	for (unsigned i = 0; i < mc.getNumOperands(); i++) {
 		auto mcop = mc.getOperand(i);

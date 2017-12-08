@@ -527,7 +527,6 @@ shared_ptr<MachineFunction> CFGReconstr::makeMI(Function *f, std::list<shared_pt
 			// now we add the operands (bb->mbb was needed)
 			for (auto linst : *bb) {
 				MCInst &mci = linst.inst;
-				// do target-dependant fixup
 				if (AW) {
 					AW->HigherMCInstToMachineInstr(bb, bb->mbb, mci);
 				}
