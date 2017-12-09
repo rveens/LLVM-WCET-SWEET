@@ -1262,7 +1262,7 @@ def tSXTH :                     // A8.6.224
                  Sched<[WriteALU]>;
 
 // Test
-let isCompare = 1, isCommutable = 1, Defs = [CPSR] in
+let isCompare = 1, isCommutable = 1, Defs = [CPSR], ALFCustomMethod="tTST_customALF" in
 def tTST :                      // A8.6.230
   T1pIDPEncode<0b1000, (outs), (ins tGPR:$Rn, tGPR:$Rm), IIC_iTSTr,
                "tst", "\t$Rn, $Rm",

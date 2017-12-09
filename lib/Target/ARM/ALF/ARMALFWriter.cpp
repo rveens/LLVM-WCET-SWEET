@@ -456,6 +456,22 @@ static void tMOVr_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, AL
 	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
 }
 
+static void tTST_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
+{
+	const TargetInstrInfo *TII = MI.getParent()->getParent()->getSubtarget().getInstrInfo();
+	const TargetRegisterInfo *TRI = MI.getParent()->getParent()->getSubtarget().getRegisterInfo();
+
+	/* TST     R0, R1  ; Perform bitwise AND of R0 value and R1 value, */ 
+	/*                     ; condition code flags are updated but result is discarded */
+    /* %R3<def>, %R4<def> = tTST pred:14, pred:%noreg<def>, %CPSR<imp-def> */
+	SExpr *load1 = ctx->load(32, TRI->getName(MI.getOperand(0).getReg()));
+	SExpr *load2 = ctx->load(32, TRI->getName(MI.getOperand(1).getReg()));
+	SExpr *andexpr = ctx->and_(32, load1, load2);
+
+	SExpr *stor = calcNZCV(ctx, load1, load2, andexpr, ctx->dec_unsigned(1, 0), 32, 32, 32);
+	alfbb.addStatement(label, TII->getName(MI.getOpcode()), stor);
+}
+
 #include "ARMGenALFWriter.inc"
 
 

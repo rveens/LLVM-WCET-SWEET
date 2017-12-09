@@ -322,7 +322,13 @@ public:
 				O << "      targetReg = TRI->getName(MI.getOperand(" << info->leafs[0].MIindex << ").getReg());\n";
 
 				handleDefaultOperand(O, "op1", info->leafs[1]);
-				handleDefaultOperand(O, "op2", info->leafs[2]);
+				// if there is not third argument we assume this is (set .. (ineg ..) )
+				// (which becomes (set .. (sub 0 ...)
+				if (info->leafs.size() == 2) {
+					O << "      op2 = ctx->dec_signed("<<bitsize<<", 0);\n";
+				} else {
+					handleDefaultOperand(O, "op2", info->leafs[2]);
+				}
 
 				bitsize = info->operators[1].bitsize;
 
@@ -557,7 +563,7 @@ public:
 			return true;
 		} else if (info->hasPattern({"set", "add"})) { 
 			return true;
-		} else if (info->hasPattern({"set", "sub"}) && info->leafs.size() >= 3) { 
+		} else if (info->hasPattern({"set", "sub"})) { 
 			return true;
 		} else if (info->hasPattern({"set", "ld"})) { 
 			return true;

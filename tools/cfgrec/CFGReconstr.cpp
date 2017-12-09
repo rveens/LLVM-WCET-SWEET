@@ -583,7 +583,9 @@ void CFGReconstr::printMCInstBBlist(list<shared_ptr<MCInstBB>> &list)
 {
 #define DEBUG_TYPE "clp-wcet"
 	for (auto &bb : list) {
-		DEBUG(dbgs() << "BB '" << bb->getBBLabel() << "':" << "\n");
+		DEBUG(dbgs() << "BB '" << bb->getBBLabel() << "'. ");
+		DEBUG(dbgs() << "jump: " << (bb->jump ? "'" + bb->jump->getBBLabel() + "'" : "none") << " ");
+		DEBUG(dbgs() << "fall_through: " << (bb->fall_through ? "'" + bb->fall_through->getBBLabel() + "''": "none") << "\n");
 		for (auto &linst : bb->Insts) {
 			DEBUG(printLabelledInst(linst, true, true));
 		}
