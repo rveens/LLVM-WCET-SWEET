@@ -20,10 +20,10 @@ namespace llvm {
 		shared_ptr<ALFBuilder> b;
 		vector<pair<string, unsigned>> BasicBlockCycles;
 	public:
-		ALFWriter(string Filename);
+		ALFWriter(string Filename, char ID);
 		virtual ~ALFWriter();
 
-		bool runOnMachineFunction(MachineFunction &MF) override;
+		virtual bool runOnMachineFunction(MachineFunction &MF) override;
 
 		virtual void initFrames() { };
 		virtual void extraFrames(const MachineConstantPool *MCP) { } ;
@@ -37,12 +37,10 @@ namespace llvm {
 		virtual void regDefALF(ALFBuilder &b) = 0;
 
 	private:
-		char ID = 0;
 		shared_ptr<raw_fd_ostream> File;
 
 		string makeBBALFname(MachineFunction &MF, MachineBasicBlock &mbb);
 	};
-
 }
 
 #endif

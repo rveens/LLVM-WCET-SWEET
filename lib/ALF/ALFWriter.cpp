@@ -1,6 +1,6 @@
 #include "llvm/ALF/ALFWriter.h"
 
-ALFWriter::ALFWriter(string Filename) :
+ALFWriter::ALFWriter(string Filename, char ID) :
 	o(nullptr), b(nullptr), MachineFunctionPass(ID) 
 {
 	std::error_code EC;

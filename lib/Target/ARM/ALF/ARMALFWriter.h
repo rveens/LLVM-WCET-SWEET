@@ -15,17 +15,12 @@ namespace llvm {
 		const MCInstrInfo *MII;
 	 	const MCRegisterInfo *MRI;
 		public:
-			ARMALFWriter() : ARMALFWriter(nullptr, nullptr)
-			{
-			}
+			static char ID;
+			ARMALFWriter();
 
-			ARMALFWriter(const MCInstrInfo *_MII, const MCRegisterInfo *_MRI)
-				: MII(_MII), MRI(_MRI), ALFWriter("arm.alf")
-			{
-				regDefALF(*b); // TableGen
-				initFrames();
-			}
-			virtual ~ARMALFWriter() { }
+			ARMALFWriter(const MCInstrInfo *_MII, const MCRegisterInfo *_MRI);
+			virtual ~ARMALFWriter();
+			StringRef getPassName() const override;
 
 			// Table'gen'd
 			virtual void printInstructionALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label) override;
@@ -38,8 +33,8 @@ namespace llvm {
 			void extraFrames(const MachineConstantPool *MCP) override;
 			virtual unsigned computeBBcycles(MachineBasicBlock &mbb) override;
 			virtual bool shouldSetCondFlags(const MachineInstr &MI) override;
+
 	};
-	/* char ARMALFWriter::ID = 0; */
 }
 
 #endif

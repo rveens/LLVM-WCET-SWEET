@@ -15,6 +15,23 @@
 #define GET_ALF_HEADERS
 #include "ARMGenALFWriter.inc"
 
+char ARMALFWriter::ID = 0;
+
+static RegisterPass<ARMALFWriter> X("ARMALFWriter", "ARM ALF Writer pass");
+
+ARMALFWriter::ARMALFWriter() : ARMALFWriter(nullptr, nullptr)
+{
+}
+
+ARMALFWriter::ARMALFWriter(const MCInstrInfo *_MII, const MCRegisterInfo *_MRI)
+	: MII(_MII), MRI(_MRI), ALFWriter("arm.alf", ID)
+{
+	regDefALF(*b); // TableGen
+	initFrames();
+}
+ARMALFWriter::~ARMALFWriter() { }
+StringRef ARMALFWriter::getPassName() const { return "ARMALFWriter"; }
+
 // custom leaf nodes
 static SExpr *t_addrmode_sp_customALF(const MachineInstr &MI, ALFStatementGroup &alfbb, ALFContext *ctx, string label)
 {
